@@ -8,5 +8,6 @@
 .kotlin
 *.png
 !app/src/main/res/**/*.png
+!media/*
 *.apk
 *.aab

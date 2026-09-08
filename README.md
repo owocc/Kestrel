@@ -1,7 +1,7 @@
 # Kestrel
 
 <p align="center">
-  <img src="app/src/main/res/drawable/ic_app_logo.png" width="120" height="120" alt="Kestrel Logo" style="border-radius: 28px;" />
+  <img src="media/banner.jpeg" alt="Kestrel Banner" style="width: 100%; max-width: 800px; border-radius: 16px;" />
 </p>
 
 <p align="center">
