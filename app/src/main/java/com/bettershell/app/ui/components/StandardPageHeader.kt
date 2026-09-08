@@ -38,7 +38,10 @@ fun StandardPageHeader(
     modifier: Modifier = Modifier,
     isDark: Boolean = isAppInDarkTheme,
     showSave: Boolean = false,
-    onSave: (() -> Unit)? = null
+    onSave: (() -> Unit)? = null,
+    actionIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Rounded.Check,
+    actionContentDescription: String = "Action",
+    isLoading: Boolean = false
 ) {
     val circleButtonBg = if (isDark) Color(0xFF1E1E1E) else Color(0xFFF3F4F6)
     val iconTint = if (isDark) Color(0xFFE5E7EB) else Color(0xFF1F2937)
@@ -74,24 +77,32 @@ fun StandardPageHeader(
             modifier = Modifier.padding(horizontal = 48.dp)
         )
 
-        // 3. 右侧圆形保存按钮
+        // 3. 右侧圆形动作按钮 (保存 / 刷新等)
         if (showSave && onSave != null) {
             Surface(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .size(40.dp)
                     .clip(CircleShape)
-                    .clickable(onClick = onSave),
+                    .clickable(enabled = !isLoading, onClick = onSave),
                 shape = CircleShape,
                 color = circleButtonBg
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = "Save",
-                        tint = iconTint,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    if (isLoading) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = actionIcon,
+                            contentDescription = actionContentDescription,
+                            tint = iconTint,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
