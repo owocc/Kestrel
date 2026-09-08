@@ -56,7 +56,7 @@ class TerminalRow {
         return startCol + text.length
     }
 
-    fun toAnnotatedString(): AnnotatedString {
+    fun toAnnotatedString(isDark: Boolean = true): AnnotatedString {
         if (cells.isEmpty()) return AnnotatedString("")
 
         // Trim trailing spaces for clean layout
@@ -86,9 +86,14 @@ class TerminalRow {
                     str.append(cells[k].char)
                 }
 
+                val resolvedFg = TerminalColors.resolveFg(cell.fg, isDark)
+                val resolvedBg = if (isDark) cell.bg else {
+                    if (cell.bg == Color.Transparent) Color.Transparent else cell.bg.copy(alpha = 0.85f)
+                }
+
                 val style = SpanStyle(
-                    color = cell.fg,
-                    background = cell.bg,
+                    color = resolvedFg,
+                    background = resolvedBg,
                     fontWeight = if (cell.isBold) FontWeight.Bold else FontWeight.Normal
                 )
                 append(AnnotatedString(str.toString(), style))
@@ -167,6 +172,22 @@ object TerminalColors {
                 Color(gray, gray, gray)
             }
             else -> DEFAULT_TEXT_COLOR
+        }
+    }
+
+    fun resolveFg(fg: Color, isDark: Boolean): Color {
+        if (isDark) return fg
+        return when (fg) {
+            DEFAULT_TEXT_COLOR -> Color(0xFF1F2328)
+            COLOR_WHITE -> Color(0xFF1F2328)
+            COLOR_BRIGHT_WHITE -> Color(0xFF111827)
+            COLOR_YELLOW -> Color(0xFFB45309)
+            COLOR_BRIGHT_YELLOW -> Color(0xFFD97706)
+            COLOR_CYAN -> Color(0xFF0E7490)
+            COLOR_BRIGHT_CYAN -> Color(0xFF0891B2)
+            COLOR_GREEN -> Color(0xFF15803D)
+            COLOR_BRIGHT_GREEN -> Color(0xFF16A34A)
+            else -> fg
         }
     }
 }
@@ -488,11 +509,11 @@ class TerminalScreenBuffer(
     }
 
     @Synchronized
-    fun toAnnotatedString(): AnnotatedString {
+    fun toAnnotatedString(isDark: Boolean = true): AnnotatedString {
         return buildAnnotatedString {
             for (rowIndex in rows.indices) {
                 val row = rows[rowIndex]
-                append(row.toAnnotatedString())
+                append(row.toAnnotatedString(isDark))
                 if (rowIndex < rows.size - 1) {
                     append("\n")
                 }

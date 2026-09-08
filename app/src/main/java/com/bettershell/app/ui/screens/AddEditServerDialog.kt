@@ -20,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Key
-import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Password
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Visibility
@@ -43,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -56,13 +54,6 @@ import androidx.compose.ui.window.DialogProperties
 import com.bettershell.app.data.AuthType
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.ui.theme.AccentGreen
-import com.bettershell.app.ui.theme.DarkOnSurface
-import com.bettershell.app.ui.theme.DarkOnSurfaceVariant
-import com.bettershell.app.ui.theme.DarkOutline
-import com.bettershell.app.ui.theme.DarkPrimary
-import com.bettershell.app.ui.theme.DarkSurface
-import com.bettershell.app.ui.theme.DarkSurfaceVariant
-import com.bettershell.app.ui.theme.TerminalCardBg
 import java.util.UUID
 
 @Composable
@@ -89,8 +80,8 @@ fun AddEditServerDialog(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
                 .clip(RoundedCornerShape(24.dp))
-                .border(1.dp, DarkOutline, RoundedCornerShape(24.dp)),
-            color = DarkSurface,
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp)),
+            color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
             Column(
@@ -108,13 +99,13 @@ fun AddEditServerDialog(
                         text = if (initialServer == null) "添加 SSH 服务器" else "编辑服务器设置",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = DarkOnSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(onClick = onDismiss) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "Close",
-                            tint = DarkOnSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -178,7 +169,7 @@ fun AddEditServerDialog(
                 Text(
                     text = "认证方式",
                     style = MaterialTheme.typography.labelMedium,
-                    color = DarkOnSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -226,7 +217,7 @@ fun AddEditServerDialog(
                                     Icon(
                                         imageVector = if (showPassword) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
                                         contentDescription = "Toggle password",
-                                        tint = DarkOnSurfaceVariant
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             },
@@ -252,13 +243,13 @@ fun AddEditServerDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(DarkSurfaceVariant)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .padding(12.dp)
                         ) {
                             Text(
                                 text = "💡 本地模拟模式：无需远程服务器，直接在手机上运行轻量级交互终端环境，随时体验 Agent 交互和展开式面板设计。",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = DarkOnSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -281,14 +272,14 @@ fun AddEditServerDialog(
                         text = "自定义启动脚本 (Startup Script)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = DarkOnSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
                 Text(
                     text = "连接建立后自动在终端运行的 Shell 代码（如激活环境、启动 Agent、或 cd 到工作空间）",
                     style = MaterialTheme.typography.bodySmall,
-                    color = DarkOnSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                 )
 
@@ -299,7 +290,7 @@ fun AddEditServerDialog(
                         Text(
                             "# 示例:\ncd ~/agent-workspace\nsource venv/bin/activate\npython3 -m agent --status",
                             fontFamily = FontFamily.Monospace,
-                            color = DarkOnSurfaceVariant.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                             fontSize = 12.sp
                         )
                     },
@@ -321,9 +312,9 @@ fun AddEditServerDialog(
                     OutlinedButton(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkOutline)
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                     ) {
-                        Text("取消", color = DarkOnSurfaceVariant)
+                        Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
                     Spacer(modifier = Modifier.width(12.dp))
@@ -347,8 +338,8 @@ fun AddEditServerDialog(
                         },
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = DarkPrimary,
-                            contentColor = Color(0xFF111827)
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
                         )
                     ) {
                         Text("保存", fontWeight = FontWeight.Bold)
@@ -370,10 +361,10 @@ private fun AuthTypeChip(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) DarkPrimary else DarkSurfaceVariant)
+            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
             .border(
                 1.dp,
-                if (selected) DarkPrimary else DarkOutline,
+                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                 RoundedCornerShape(12.dp)
             )
             .clickable(onClick = onClick)
@@ -387,13 +378,13 @@ private fun AuthTypeChip(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (selected) Color(0xFF111827) else DarkOnSurfaceVariant
+                tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                color = if (selected) Color(0xFF111827) else DarkOnSurface
+                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
             )
         }
     }
@@ -401,12 +392,12 @@ private fun AuthTypeChip(
 
 @Composable
 private fun textFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedContainerColor = TerminalCardBg,
-    unfocusedContainerColor = TerminalCardBg,
-    focusedBorderColor = DarkPrimary,
-    unfocusedBorderColor = DarkOutline,
-    focusedTextColor = DarkOnSurface,
-    unfocusedTextColor = DarkOnSurface,
-    focusedLabelColor = DarkPrimary,
-    unfocusedLabelColor = DarkOnSurfaceVariant
+    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+    focusedLabelColor = MaterialTheme.colorScheme.primary,
+    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
 )

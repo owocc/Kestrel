@@ -2,16 +2,26 @@ package com.bettershell.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Terminal OLED Dark Background
+// Terminal Backgrounds
 val TerminalBlack = Color(0xFF000000)
+val TerminalLight = Color(0xFFF8F9FB)
 val TerminalDarkSurface = Color(0xFF0D0E12)
-val TerminalCardBg = Color(0xFF16181D)
-val TerminalCardBorder = Color(0xFF262933)
+val TerminalLightSurface = Color(0xFFFFFFFF)
 
-// Contrast Input Box (matches Image #1 white pill & sheet)
+// Cards & Containers
+val TerminalCardBg = Color(0xFF16181D)
+val TerminalCardBgDark = Color(0xFF16181D)
+val TerminalCardBgLight = Color(0xFFFFFFFF)
+val TerminalCardBorder = Color(0xFF262933)
+val TerminalCardBorderDark = Color(0xFF262933)
+val TerminalCardBorderLight = Color(0xFFE2E8F0)
+
+// Input Panel Colors (High-contrast, fully rounded pill)
 val InputPanelWhite = Color(0xFFFFFFFF)
 val InputPanelSurface = Color(0xFFF4F5F7)
+val InputPanelDarkSurface = Color(0xFF18181C)
 val InputTextDark = Color(0xFF141519)
+val InputTextLight = Color(0xFFF3F4F6)
 val InputTextSecondary = Color(0xFF6B7280)
 val InputDivider = Color(0xFFE5E7EB)
 
@@ -33,3 +43,14 @@ val DarkPrimary = Color(0xFFE5E7EB)
 val DarkOnPrimary = Color(0xFF111827)
 val DarkSecondary = Color(0xFF38BDF8)
 val DarkOutline = Color(0xFF2D313E)
+
+// Light M3 Palette
+val LightBackground = Color(0xFFF8F9FB)
+val LightSurface = Color(0xFFFFFFFF)
+val LightSurfaceVariant = Color(0xFFF1F3F6)
+val LightOnSurface = Color(0xFF191C20)
+val LightOnSurfaceVariant = Color(0xFF5A606B)
+val LightPrimary = Color(0xFF111827)
+val LightOnPrimary = Color(0xFFFFFFFF)
+val LightSecondary = Color(0xFF0284C7)
+val LightOutline = Color(0xFFE2E8F0)

@@ -3,6 +3,7 @@ package com.bettershell.app.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,11 +22,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.ArrowForward
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SmartToy
@@ -53,30 +54,42 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bettershell.app.data.AppThemeMode
 import com.bettershell.app.data.AuthType
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.data.ServerRepository
-import com.bettershell.app.ui.theme.*
+import com.bettershell.app.data.TerminalPreferencesRepository
+import com.bettershell.app.ui.theme.AccentCyan
+import com.bettershell.app.ui.theme.AccentGreen
+import com.bettershell.app.ui.theme.AccentOrange
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ServerListScreen(
     repository: ServerRepository,
+    prefsRepository: TerminalPreferencesRepository,
     onSelectServer: (ServerConfig) -> Unit
 ) {
     val servers by repository.servers.collectAsState()
+    val terminalPrefs by prefsRepository.preferences.collectAsState()
     var showAddEditDialog by remember { mutableStateOf(false) }
     var editingServer by remember { mutableStateOf<ServerConfig?>(null) }
     val scope = rememberCoroutineScope()
 
+    val isDark = when (terminalPrefs.themeMode) {
+        AppThemeMode.DARK -> true
+        AppThemeMode.LIGHT -> false
+        AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
+
     Scaffold(
-        containerColor = TerminalBlack,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -88,8 +101,8 @@ fun ServerListScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(DarkSurfaceVariant)
-                                .border(1.dp, DarkOutline, RoundedCornerShape(10.dp)),
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -104,17 +117,29 @@ fun ServerListScreen(
                                 text = "BetterShell",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
-                                color = DarkOnSurface
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = "AI Agent Shell & Mobile Terminal",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = DarkOnSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            val nextMode = if (isDark) AppThemeMode.LIGHT else AppThemeMode.DARK
+                            prefsRepository.updateThemeMode(nextMode)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                            contentDescription = "切换主题模式",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     IconButton(
                         onClick = {
                             editingServer = null
@@ -124,12 +149,12 @@ fun ServerListScreen(
                         Icon(
                             imageVector = Icons.Rounded.Add,
                             contentDescription = "Add Server",
-                            tint = DarkOnSurface
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = TerminalBlack
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         },
@@ -141,8 +166,8 @@ fun ServerListScreen(
                 },
                 icon = { Icon(Icons.Rounded.Add, "Add Server") },
                 text = { Text("添加服务器", fontWeight = FontWeight.SemiBold) },
-                containerColor = DarkPrimary,
-                contentColor = Color(0xFF111827),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 elevation = FloatingActionButtonDefaults.elevation(4.dp)
             )
         }
@@ -153,7 +178,6 @@ fun ServerListScreen(
                 .padding(paddingValues)
         ) {
             if (servers.isEmpty()) {
-                // Empty state
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -165,13 +189,13 @@ fun ServerListScreen(
                         modifier = Modifier
                             .size(72.dp)
                             .clip(CircleShape)
-                            .background(DarkSurfaceVariant),
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Terminal,
                             contentDescription = null,
-                            tint = DarkOnSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(36.dp)
                         )
                     }
@@ -180,13 +204,13 @@ fun ServerListScreen(
                         text = "暂无服务器配置",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = DarkOnSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "点击下方按钮添加远程 SSH 服务器或本地 Agent 节点",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = DarkOnSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
@@ -200,7 +224,7 @@ fun ServerListScreen(
                             text = "已配置的服务器 (${servers.size})",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = DarkOnSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp)
                         )
                     }
@@ -260,9 +284,9 @@ fun ServerCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .border(1.dp, DarkOutline, RoundedCornerShape(18.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(18.dp))
             .clickable(onClick = onConnect),
-        color = TerminalCardBg,
+        color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp
     ) {
         Column(
@@ -278,15 +302,14 @@ fun ServerCard(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    // Server icon / avatar
                     Box(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (server.isMock) AccentGreen.copy(alpha = 0.15f) else DarkSurfaceVariant)
+                            .background(if (server.isMock) AccentGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant)
                             .border(
                                 1.dp,
-                                if (server.isMock) AccentGreen.copy(alpha = 0.4f) else DarkOutline,
+                                if (server.isMock) AccentGreen.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline,
                                 RoundedCornerShape(12.dp)
                             ),
                         contentAlignment = Alignment.Center
@@ -308,13 +331,12 @@ fun ServerCard(
                                 text = server.name,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = DarkOnSurface,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)
                             )
 
-                            // Auth Badge
                             val badgeLabel = when (server.authType) {
                                 AuthType.DEMO_MOCK -> "Demo"
                                 AuthType.PASSWORD -> "密码"
@@ -342,16 +364,14 @@ fun ServerCard(
 
                         Spacer(modifier = Modifier.height(3.dp))
 
-                        // Host info
                         Text(
                             text = "${server.username}@${server.host}:${server.port}",
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                            color = DarkOnSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                // Connect Button & Menu
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -359,14 +379,14 @@ fun ServerCard(
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(DarkPrimary)
+                            .background(MaterialTheme.colorScheme.primary)
                             .clickable(onClick = onConnect)
                             .padding(8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.PlayArrow,
                             contentDescription = "Connect",
-                            tint = Color(0xFF111827),
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -376,23 +396,23 @@ fun ServerCard(
                             Icon(
                                 imageVector = Icons.Rounded.MoreVert,
                                 contentDescription = "More Options",
-                                tint = DarkOnSurfaceVariant
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
                         DropdownMenu(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false },
-                            modifier = Modifier.background(DarkSurface)
+                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                         ) {
                             DropdownMenuItem(
-                                text = { Text("编辑配置", color = DarkOnSurface) },
+                                text = { Text("编辑配置", color = MaterialTheme.colorScheme.onSurface) },
                                 onClick = {
                                     menuExpanded = false
                                     onEdit()
                                 },
                                 leadingIcon = {
-                                    Icon(Icons.Rounded.Edit, null, tint = DarkOnSurfaceVariant)
+                                    Icon(Icons.Rounded.Edit, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             )
                             DropdownMenuItem(
@@ -410,14 +430,13 @@ fun ServerCard(
                 }
             }
 
-            // Startup Script chip if configured
             if (server.startupScript.isNotBlank()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .background(DarkSurfaceVariant.copy(alpha = 0.6f))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -434,7 +453,7 @@ fun ServerCard(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp
                         ),
-                        color = DarkOnSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1
                     )
                 }

@@ -8,6 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,10 +37,11 @@ class MainActivity : ComponentActivity() {
         val terminalPrefsRepo = com.bettershell.app.data.TerminalPreferencesRepository(applicationContext)
         val sessionManager = com.bettershell.app.terminal.SessionManager()
         setContent {
-            BetterShellTheme {
+            val terminalPrefs by terminalPrefsRepo.preferences.collectAsState()
+            BetterShellTheme(themeMode = terminalPrefs.themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = TerminalBlack
+                    color = MaterialTheme.colorScheme.background
                 ) {
                     var currentScreen by remember { mutableStateOf<Screen>(Screen.ServerList) }
 
@@ -50,6 +53,7 @@ class MainActivity : ComponentActivity() {
                             is Screen.ServerList -> {
                                 ServerListScreen(
                                     repository = repository,
+                                    prefsRepository = terminalPrefsRepo,
                                     onSelectServer = { server ->
                                         currentScreen = Screen.Session(server)
                                     }

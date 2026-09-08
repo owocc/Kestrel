@@ -54,6 +54,9 @@ class TerminalSession(
     private val _annotatedOutput = MutableStateFlow(AnnotatedString(""))
     val annotatedOutput: StateFlow<AnnotatedString> = _annotatedOutput.asStateFlow()
     private val _history = MutableStateFlow<List<String>>(emptyList())
+    fun getAnnotatedOutput(isDark: Boolean): AnnotatedString {
+        return screenBuffer.toAnnotatedString(isDark)
+    }
     val history: StateFlow<List<String>> = _history.asStateFlow()
 
     private var jschSession: Session? = null

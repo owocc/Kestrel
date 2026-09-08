@@ -1,13 +1,19 @@
 package com.bettershell.app.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,11 +38,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -46,12 +47,15 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloseFullscreen
 import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FontDownload
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.OpenInFull
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
@@ -85,6 +89,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -95,6 +100,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bettershell.app.data.AppThemeMode
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.data.ServerRepository
 import com.bettershell.app.data.TerminalFont
@@ -106,22 +112,14 @@ import com.bettershell.app.ui.theme.AccentCyan
 import com.bettershell.app.ui.theme.AccentGreen
 import com.bettershell.app.ui.theme.AccentOrange
 import com.bettershell.app.ui.theme.AccentRed
-import com.bettershell.app.ui.theme.DarkOnSurface
-import com.bettershell.app.ui.theme.DarkOnSurfaceVariant
-import com.bettershell.app.ui.theme.DarkOutline
-import com.bettershell.app.ui.theme.DarkPrimary
-import com.bettershell.app.ui.theme.DarkSurface
-import com.bettershell.app.ui.theme.DarkSurfaceVariant
 import com.bettershell.app.ui.theme.InputDivider
 import com.bettershell.app.ui.theme.InputPanelSurface
 import com.bettershell.app.ui.theme.InputPanelWhite
 import com.bettershell.app.ui.theme.InputTextDark
 import com.bettershell.app.ui.theme.InputTextSecondary
-import com.bettershell.app.ui.theme.TerminalBlack
-import com.bettershell.app.ui.theme.TerminalCardBg
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -135,7 +133,6 @@ fun SessionScreen(
     val coroutineScope = rememberCoroutineScope()
     var currentServer by remember { mutableStateOf(server) }
 
-    // Multi-session state observation
     val sessionsMap by sessionManager.sessionsMap.collectAsState()
     val activeSessionMap by sessionManager.activeSessionMap.collectAsState()
 
@@ -143,7 +140,6 @@ fun SessionScreen(
         sessionsMap[currentServer.id] ?: emptyList()
     }
 
-    // Ensure at least one initial session exists
     val activeSessionItem = remember(serverSessions, activeSessionMap, currentServer.id) {
         sessionManager.getActiveSession(currentServer.id)
             ?: sessionManager.getOrCreateInitialSession(currentServer)
@@ -151,8 +147,18 @@ fun SessionScreen(
 
     val terminalSession = activeSessionItem.terminalSession
     val connectionState by terminalSession.connectionState.collectAsState()
-    val annotatedOutput by terminalSession.annotatedOutput.collectAsState()
+    val rawAnnotatedOutput by terminalSession.annotatedOutput.collectAsState()
     val terminalPrefs by prefsRepository.preferences.collectAsState()
+
+    val isDark = when (terminalPrefs.themeMode) {
+        AppThemeMode.DARK -> true
+        AppThemeMode.LIGHT -> false
+        AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
+
+    val displayOutput = remember(rawAnnotatedOutput, isDark) {
+        terminalSession.getAnnotatedOutput(isDark)
+    }
 
     var inputText by remember { mutableStateOf("") }
     var isExpanded by remember { mutableStateOf(false) }
@@ -162,7 +168,6 @@ fun SessionScreen(
     var showFontSizeIndicator by remember { mutableStateOf(false) }
     var indicatorDismissJob by remember { mutableStateOf<Job?>(null) }
 
-    // Keyboard & Back Gesture management
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val density = LocalDensity.current
@@ -171,7 +176,7 @@ fun SessionScreen(
         derivedStateOf { imeInsets.getBottom(density) > 0 }
     }
 
-    // Hierarchical back handling: closes modals/keyboard before navigating away
+    // Hierarchical back handling
     BackHandler(enabled = true) {
         when {
             sessionToRename != null -> {
@@ -191,7 +196,6 @@ fun SessionScreen(
                 keyboardController?.hide()
             }
             else -> {
-                // Return to server list; sessions remain preserved and running!
                 onBack()
             }
         }
@@ -200,7 +204,7 @@ fun SessionScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(TerminalBlack)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()
@@ -208,13 +212,18 @@ fun SessionScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Top Navigation & Status Bar with Session Switching
+            // Top Navigation & Status Bar with Session Switching & Theme Toggle
             SessionTopBar(
                 server = currentServer,
                 activeSession = activeSessionItem,
                 connectionState = connectionState,
                 softWrap = terminalPrefs.softWrap,
+                isDark = isDark,
                 onToggleSoftWrap = { prefsRepository.toggleSoftWrap() },
+                onToggleTheme = {
+                    val nextMode = if (isDark) AppThemeMode.LIGHT else AppThemeMode.DARK
+                    prefsRepository.updateThemeMode(nextMode)
+                },
                 onBack = {
                     focusManager.clearFocus()
                     keyboardController?.hide()
@@ -226,7 +235,7 @@ fun SessionScreen(
                 onOpenSettings = { showServerSettingsSheet = true }
             )
 
-            // Virtual Terminal View Area (VT Buffer with in-place line rewrite and 2D scroll)
+            // Virtual Terminal View Area (VT Buffer with in-place line rewrite and 2D scroll + Pinch zoom)
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -274,7 +283,7 @@ fun SessionScreen(
                     val verticalScrollState = rememberScrollState()
                     val horizontalScrollState = rememberScrollState()
 
-                    LaunchedEffect(annotatedOutput) {
+                    LaunchedEffect(displayOutput) {
                         verticalScrollState.animateScrollTo(verticalScrollState.maxValue)
                     }
 
@@ -287,12 +296,12 @@ fun SessionScreen(
                             )
                     ) {
                         Text(
-                            text = annotatedOutput,
+                            text = displayOutput,
                             style = TextStyle(
                                 fontFamily = terminalPrefs.font.toComposeFontFamily(),
                                 fontSize = terminalPrefs.fontSizeSp.sp,
                                 lineHeight = (terminalPrefs.fontSizeSp * terminalPrefs.lineSpacingMultiplier).sp,
-                                color = Color(0xFFE5E7EB)
+                                color = if (isDark) Color(0xFFE5E7EB) else Color(0xFF1F2328)
                             ),
                             softWrap = terminalPrefs.softWrap,
                             modifier = if (terminalPrefs.softWrap) Modifier.fillMaxWidth() else Modifier
@@ -310,13 +319,13 @@ fun SessionScreen(
                         .padding(8.dp)
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = DarkSurfaceVariant.copy(alpha = 0.95f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkOutline),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         shadowElevation = 6.dp
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
@@ -330,24 +339,25 @@ fun SessionScreen(
                                 text = "字号: ${terminalPrefs.fontSizeSp.toInt()} sp",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = DarkOnSurface
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
                 }
             }
 
-            // Quick Shortcut Bar (ESC, TAB, CTRL-C, CTRL-D, Arrows)
+            // Quick Shortcut Bar (ENTER, ESC, TAB, CTRL-C, CTRL-D, Arrows)
             QuickShortcutBar(
                 onSendRaw = { terminalSession.sendRaw(it) },
                 onInsertText = { inputText += it }
             )
 
-            // Expandable Bottom Input Panel
+            // Expandable Bottom Input Panel (Fully rounded pill shape)
             ExpandableInputPanel(
                 text = inputText,
                 onTextChanged = { inputText = it },
                 isExpanded = isExpanded,
+                isDark = isDark,
                 onToggleExpand = { isExpanded = !isExpanded },
                 onSend = {
                     if (inputText.isNotBlank()) {
@@ -410,7 +420,7 @@ fun SessionScreen(
         )
     }
 
-    // Server Settings Sheet (Font, Display & Startup Script)
+    // Server Settings Sheet (Theme, Font, Display & Startup Script)
     if (showServerSettingsSheet) {
         ServerSettingsSheet(
             server = currentServer,
@@ -433,7 +443,9 @@ fun SessionTopBar(
     activeSession: ServerSessionItem,
     connectionState: ConnectionState,
     softWrap: Boolean,
+    isDark: Boolean,
     onToggleSoftWrap: () -> Unit,
+    onToggleTheme: () -> Unit,
     onBack: () -> Unit,
     onTitleClick: () -> Unit,
     onReconnect: () -> Unit,
@@ -444,7 +456,7 @@ fun SessionTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)
-            .background(TerminalBlack)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -459,7 +471,7 @@ fun SessionTopBar(
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = "Back",
-                    tint = DarkOnSurface
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -477,7 +489,7 @@ fun SessionTopBar(
                         text = "${server.name} · ${activeSession.title}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = DarkOnSurface,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
@@ -486,7 +498,7 @@ fun SessionTopBar(
                     Icon(
                         imageVector = Icons.Rounded.KeyboardArrowDown,
                         contentDescription = "Switch Sessions",
-                        tint = DarkOnSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
 
@@ -494,7 +506,7 @@ fun SessionTopBar(
                     val (dotColor, statusText) = when (connectionState) {
                         is ConnectionState.Connected -> AccentGreen to "已连接"
                         is ConnectionState.Connecting -> AccentOrange to "连接中"
-                        is ConnectionState.Disconnected -> DarkOnSurfaceVariant to "未连接"
+                        is ConnectionState.Disconnected -> MaterialTheme.colorScheme.onSurfaceVariant to "未连接"
                         is ConnectionState.Error -> AccentRed to "错误"
                     }
 
@@ -527,7 +539,7 @@ fun SessionTopBar(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp
                     ),
-                    color = DarkOnSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -537,11 +549,19 @@ fun SessionTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
+            IconButton(onClick = onToggleTheme) {
+                Icon(
+                    imageVector = if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                    contentDescription = "切换主题模式",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
             IconButton(onClick = onToggleSoftWrap) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.WrapText,
                     contentDescription = if (softWrap) "禁用自动换行" else "启用自动换行",
-                    tint = if (softWrap) AccentGreen else DarkOnSurfaceVariant
+                    tint = if (softWrap) AccentGreen else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -559,7 +579,7 @@ fun SessionTopBar(
                 Icon(
                     imageVector = Icons.Rounded.DeleteSweep,
                     contentDescription = "Clear Terminal",
-                    tint = DarkOnSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -567,7 +587,7 @@ fun SessionTopBar(
                 Icon(
                     imageVector = Icons.Rounded.Settings,
                     contentDescription = "Server Settings",
-                    tint = DarkOnSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -576,7 +596,6 @@ fun SessionTopBar(
 
 /**
  * Session Switcher Bottom Sheet
- * Supports multiple active sessions per server, creating new ones, switching, and renaming
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -592,7 +611,7 @@ fun SessionSwitcherSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = DarkSurface,
+        containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = {
             Box(
                 modifier = Modifier
@@ -600,7 +619,7 @@ fun SessionSwitcherSheet(
                     .width(40.dp)
                     .height(4.dp)
                     .clip(CircleShape)
-                    .background(DarkOutline)
+                    .background(MaterialTheme.colorScheme.outline)
             )
         }
     ) {
@@ -619,23 +638,22 @@ fun SessionSwitcherSheet(
                         text = "会话管理 (Sessions)",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = DarkOnSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "${server.name} · 已保持 ${sessions.size} 个后台会话",
                         style = MaterialTheme.typography.bodySmall,
-                        color = DarkOnSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Rounded.Close, "Close", tint = DarkOnSurfaceVariant)
+                    Icon(Icons.Rounded.Close, "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Session List
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -649,11 +667,11 @@ fun SessionSwitcherSheet(
                             .clip(RoundedCornerShape(14.dp))
                             .border(
                                 1.dp,
-                                if (isActive) AccentGreen else DarkOutline,
+                                if (isActive) AccentGreen else MaterialTheme.colorScheme.outline,
                                 RoundedCornerShape(14.dp)
                             )
                             .clickable { onSelectSession(sessionItem.id) },
-                        color = if (isActive) TerminalCardBg else DarkSurfaceVariant
+                        color = if (isActive) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
                     ) {
                         Row(
                             modifier = Modifier
@@ -670,7 +688,7 @@ fun SessionSwitcherSheet(
                                 Icon(
                                     imageVector = if (isActive) Icons.Rounded.CheckCircle else Icons.Rounded.Terminal,
                                     contentDescription = null,
-                                    tint = if (isActive) AccentGreen else DarkOnSurfaceVariant,
+                                    tint = if (isActive) AccentGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
                                 )
 
@@ -683,7 +701,7 @@ fun SessionSwitcherSheet(
                                             text = sessionItem.title,
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                            color = DarkOnSurface,
+                                            color = MaterialTheme.colorScheme.onSurface,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
@@ -711,12 +729,11 @@ fun SessionSwitcherSheet(
                                             else -> "○ 未连接"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = if (connState is ConnectionState.Connected) AccentGreen else DarkOnSurfaceVariant
+                                        color = if (connState is ConnectionState.Connected) AccentGreen else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
 
-                            // Actions per session: Rename & Close
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -725,7 +742,7 @@ fun SessionSwitcherSheet(
                                     Icon(
                                         imageVector = Icons.Rounded.Edit,
                                         contentDescription = "重命名会话",
-                                        tint = DarkOnSurfaceVariant,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -748,7 +765,6 @@ fun SessionSwitcherSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // + New Session Button
             Button(
                 onClick = onNewSession,
                 modifier = Modifier
@@ -756,8 +772,8 @@ fun SessionSwitcherSheet(
                     .height(48.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = DarkPrimary,
-                    contentColor = Color(0xFF111827)
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(20.dp))
@@ -781,14 +797,14 @@ fun RenameSessionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("修改会话标题", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = DarkOnSurface)
+            Text("修改会话标题", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         },
         text = {
             Column {
                 Text(
                     text = "为该终端会话设置自定义标题（留空将继续自动跟随终端内的程序名称）：",
                     style = MaterialTheme.typography.bodySmall,
-                    color = DarkOnSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
@@ -797,12 +813,12 @@ fun RenameSessionDialog(
                     label = { Text("会话标题") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = TerminalCardBg,
-                        unfocusedContainerColor = TerminalCardBg,
-                        focusedBorderColor = DarkPrimary,
-                        unfocusedBorderColor = DarkOutline,
-                        focusedTextColor = DarkOnSurface,
-                        unfocusedTextColor = DarkOnSurface
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -812,8 +828,8 @@ fun RenameSessionDialog(
             Button(
                 onClick = { onSave(title.trim()) },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = DarkPrimary,
-                    contentColor = Color(0xFF111827)
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
                 Text("保存", fontWeight = FontWeight.Bold)
@@ -821,10 +837,10 @@ fun RenameSessionDialog(
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss) {
-                Text("取消", color = DarkOnSurfaceVariant)
+                Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        containerColor = DarkSurface,
+        containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(20.dp)
     )
 }
@@ -865,13 +881,13 @@ fun QuickKeyChip(
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(if (isHighlight) DarkPrimary else DarkSurfaceVariant)
+            .background(if (isHighlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
             .border(
                 1.dp,
                 when {
-                    isHighlight -> DarkPrimary
+                    isHighlight -> MaterialTheme.colorScheme.primary
                     isDanger -> AccentRed.copy(alpha = 0.5f)
-                    else -> DarkOutline
+                    else -> MaterialTheme.colorScheme.outline
                 },
                 RoundedCornerShape(8.dp)
             )
@@ -886,20 +902,25 @@ fun QuickKeyChip(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = when {
-                    isHighlight -> Color(0xFF111827)
+                    isHighlight -> MaterialTheme.colorScheme.onPrimary
                     isDanger -> AccentRed
-                    else -> DarkOnSurface
+                    else -> MaterialTheme.colorScheme.onSurface
                 }
             )
         )
     }
 }
 
+/**
+ * Expandable Input Panel
+ * Fully rounded pill shape (全圆角)
+ */
 @Composable
 fun ExpandableInputPanel(
     text: String,
     onTextChanged: (String) -> Unit,
     isExpanded: Boolean,
+    isDark: Boolean,
     onToggleExpand: () -> Unit,
     onSend: () -> Unit,
     onQuickPrompt: (String) -> Unit,
@@ -913,10 +934,11 @@ fun ExpandableInputPanel(
         label = "panelHeight"
     )
 
-    val cornerRadius by animateDpAsState(
-        targetValue = if (isExpanded) 28.dp else 22.dp,
-        label = "panelCorner"
-    )
+    val panelShape = if (isExpanded) {
+        RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
+    } else {
+        RoundedCornerShape(34.dp)
+    }
 
     Surface(
         modifier = Modifier
@@ -930,18 +952,11 @@ fun ExpandableInputPanel(
             .height(animatedHeight)
             .shadow(
                 elevation = if (isExpanded) 16.dp else 6.dp,
-                shape = if (isExpanded) {
-                    RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius)
-                } else {
-                    RoundedCornerShape(cornerRadius)
-                }
+                shape = panelShape
             ),
-        shape = if (isExpanded) {
-            RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius)
-        } else {
-            RoundedCornerShape(cornerRadius)
-        },
-        color = InputPanelWhite,
+        shape = panelShape,
+        color = if (isDark) InputPanelWhite else MaterialTheme.colorScheme.surface,
+        border = if (isDark) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         tonalElevation = 8.dp
     ) {
         Column(
@@ -961,6 +976,7 @@ fun ExpandableInputPanel(
             } else {
                 CollapsedPanelContent(
                     text = text,
+                    isDark = isDark,
                     onTextChanged = onTextChanged,
                     onToggleExpand = onToggleExpand,
                     onSend = onSend
@@ -973,6 +989,7 @@ fun ExpandableInputPanel(
 @Composable
 fun CollapsedPanelContent(
     text: String,
+    isDark: Boolean,
     onTextChanged: (String) -> Unit,
     onToggleExpand: () -> Unit,
     onSend: () -> Unit
@@ -986,27 +1003,28 @@ fun CollapsedPanelContent(
     ) {
         Box(
             modifier = Modifier
-                .size(38.dp)
+                .size(40.dp)
                 .clip(CircleShape)
-                .background(InputPanelSurface)
+                .background(if (isDark) InputPanelSurface else MaterialTheme.colorScheme.surfaceVariant)
                 .clickable(onClick = onToggleExpand),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Rounded.OpenInFull,
                 contentDescription = "Expand input",
-                tint = InputTextDark,
+                tint = if (isDark) InputTextDark else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(18.dp)
             )
         }
 
+        // Full round inner text input container (全圆角)
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(44.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(InputPanelSurface)
-                .padding(horizontal = 14.dp),
+                .height(46.dp)
+                .clip(RoundedCornerShape(23.dp))
+                .background(if (isDark) InputPanelSurface else MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 18.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             if (text.isEmpty()) {
@@ -1015,7 +1033,7 @@ fun CollapsedPanelContent(
                     style = TextStyle(
                         fontFamily = FontFamily.Default,
                         fontSize = 14.sp,
-                        color = InputTextSecondary
+                        color = if (isDark) InputTextSecondary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 )
             }
@@ -1026,10 +1044,10 @@ fun CollapsedPanelContent(
                 textStyle = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 14.sp,
-                    color = InputTextDark,
+                    color = if (isDark) InputTextDark else MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Medium
                 ),
-                cursorBrush = SolidColor(InputTextDark),
+                cursorBrush = SolidColor(if (isDark) InputTextDark else MaterialTheme.colorScheme.onSurface),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { onSend() })
@@ -1038,16 +1056,16 @@ fun CollapsedPanelContent(
 
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(42.dp)
                 .clip(CircleShape)
-                .background(if (text.isNotBlank()) Color(0xFF111827) else Color(0xFFE5E7EB))
+                .background(if (text.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                 .clickable(enabled = text.isNotBlank(), onClick = onSend),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.Send,
                 contentDescription = "Send",
-                tint = if (text.isNotBlank()) Color.White else Color(0xFF9CA3AF),
+                tint = if (text.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -1281,7 +1299,7 @@ fun PromptChip(
 
 /**
  * Server Settings Modal Sheet
- * Display, Font & Startup Script settings
+ * Theme, Font, Display & Startup Script settings
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1296,7 +1314,7 @@ fun ServerSettingsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = DarkSurface,
+        containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = {
             Box(
                 modifier = Modifier
@@ -1304,7 +1322,7 @@ fun ServerSettingsSheet(
                     .width(40.dp)
                     .height(4.dp)
                     .clip(CircleShape)
-                    .background(DarkOutline)
+                    .background(MaterialTheme.colorScheme.outline)
             )
         }
     ) {
@@ -1323,11 +1341,11 @@ fun ServerSettingsSheet(
                     text = "服务器设置",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = DarkOnSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Rounded.Close, "Close", tint = DarkOnSurfaceVariant)
+                    Icon(Icons.Rounded.Close, "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -1336,12 +1354,66 @@ fun ServerSettingsSheet(
             Text(
                 text = "${server.name} (${server.username}@${server.host}:${server.port})",
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                color = DarkOnSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Section 1: Terminal Display & Font Settings
+            // Section 1: Theme Mode Selection
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Palette,
+                    contentDescription = null,
+                    tint = AccentOrange,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "主题外观 (Theme Mode)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AppThemeMode.entries.forEach { mode ->
+                    val selected = terminalPrefs.themeMode == mode
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                            .border(
+                                1.dp,
+                                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clickable { prefsRepository.updateThemeMode(mode) }
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = mode.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Section 2: Terminal Display & Font Settings
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1356,7 +1428,7 @@ fun ServerSettingsSheet(
                     text = "终端字体与排版设置",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = DarkOnSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -1365,7 +1437,7 @@ fun ServerSettingsSheet(
             Text(
                 text = "选择字体 (包含完整 Nerd Font / Powerline 图标):",
                 style = MaterialTheme.typography.bodySmall,
-                color = DarkOnSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -1379,8 +1451,8 @@ fun ServerSettingsSheet(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(if (selected) DarkPrimary else DarkSurfaceVariant)
-                            .border(1.dp, if (selected) DarkPrimary else DarkOutline, RoundedCornerShape(10.dp))
+                            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                            .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
                             .clickable { prefsRepository.updateFont(fontOption) }
                             .padding(vertical = 10.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center
@@ -1393,7 +1465,7 @@ fun ServerSettingsSheet(
                             },
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selected) Color(0xFF111827) else DarkOnSurface,
+                            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                             fontSize = 11.sp
                         )
                     }
@@ -1407,8 +1479,8 @@ fun ServerSettingsSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
-                    .background(TerminalCardBg)
-                    .border(1.dp, DarkOutline, RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Text(
@@ -1431,15 +1503,15 @@ fun ServerSettingsSheet(
             ) {
                 Column {
                     Text(
-                        text = "字体大小",
+                        text = "字体大小 (支持双指手势缩放)",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = DarkOnSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "当前: ${terminalPrefs.fontSizeSp.toInt()} sp",
                         style = MaterialTheme.typography.bodySmall,
-                        color = DarkOnSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -1451,24 +1523,24 @@ fun ServerSettingsSheet(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(DarkSurfaceVariant)
-                            .border(1.dp, DarkOutline, CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                             .clickable { prefsRepository.updateFontSize(terminalPrefs.fontSizeSp - 1f) },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("-", color = DarkOnSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("-", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
 
                     Box(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(DarkSurfaceVariant)
-                            .border(1.dp, DarkOutline, CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                             .clickable { prefsRepository.updateFontSize(terminalPrefs.fontSizeSp + 1f) },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("+", color = DarkOnSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("+", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
                 }
             }
@@ -1480,8 +1552,8 @@ fun ServerSettingsSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(DarkSurfaceVariant.copy(alpha = 0.5f))
-                    .border(1.dp, DarkOutline, RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
                     .clickable { prefsRepository.toggleSoftWrap() }
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1492,7 +1564,7 @@ fun ServerSettingsSheet(
                         text = "自动换行 (Soft Wrap)",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = DarkOnSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = if (terminalPrefs.softWrap) "已开启：长行强制折行" else "已关闭（推荐）：允许横向左右滑动，完整保留 CLI 表格与树形排版",
@@ -1508,7 +1580,7 @@ fun ServerSettingsSheet(
             }
 
             Spacer(modifier = Modifier.height(18.dp))
-            HorizontalDivider(color = DarkOutline)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             Spacer(modifier = Modifier.height(14.dp))
 
             // Startup Script Editor
@@ -1526,14 +1598,14 @@ fun ServerSettingsSheet(
                     text = "进入服务器自动运行代码 (Startup Script)",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = DarkOnSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             Text(
                 text = "配置该服务器进入后运行的自定义 sh 脚本（例如激活虚拟环境、启动 Agent 会话等）：",
                 style = MaterialTheme.typography.bodySmall,
-                color = DarkOnSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
             )
 
@@ -1544,7 +1616,7 @@ fun ServerSettingsSheet(
                     Text(
                         "# 编写自定义 sh 代码\ncd ~/agent\nsource venv/bin/activate\npython3 main.py",
                         fontFamily = FontFamily.Monospace,
-                        color = DarkOnSurfaceVariant.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         fontSize = 12.sp
                     )
                 },
@@ -1553,12 +1625,12 @@ fun ServerSettingsSheet(
                     .height(180.dp),
                 textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = TerminalCardBg,
-                    unfocusedContainerColor = TerminalCardBg,
-                    focusedBorderColor = DarkPrimary,
-                    unfocusedBorderColor = DarkOutline,
-                    focusedTextColor = DarkOnSurface,
-                    unfocusedTextColor = DarkOnSurface
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                 )
             )
 
@@ -1575,7 +1647,7 @@ fun ServerSettingsSheet(
                     onClick = onDismiss,
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("取消", color = DarkOnSurfaceVariant)
+                    Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
                 Spacer(modifier = Modifier.width(12.dp))
@@ -1586,8 +1658,8 @@ fun ServerSettingsSheet(
                     },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = DarkPrimary,
-                        contentColor = Color(0xFF111827)
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
                     Text("保存配置", fontWeight = FontWeight.Bold)

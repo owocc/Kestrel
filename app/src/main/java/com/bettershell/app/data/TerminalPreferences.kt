@@ -24,12 +24,19 @@ enum class TerminalFont(val displayName: String) {
         }
     }
 }
+enum class AppThemeMode(val displayName: String) {
+    SYSTEM("跟随系统"),
+    DARK("深色模式"),
+    LIGHT("浅色模式")
+}
+
 
 data class TerminalPreferences(
     val font: TerminalFont = TerminalFont.JETBRAINS_MONO_NERD,
     val fontSizeSp: Float = 12f,
     val lineSpacingMultiplier: Float = 1.3f,
-    val softWrap: Boolean = false // 默认不换行，支持横向滚动保持 CLI 表格完整排版
+    val softWrap: Boolean = false, // 默认不换行，支持横向滚动保持 CLI 表格完整排版
+    val themeMode: AppThemeMode = AppThemeMode.DARK
 )
 
 class TerminalPreferencesRepository(context: Context) {
@@ -51,11 +58,19 @@ class TerminalPreferencesRepository(context: Context) {
         val lineSpacing = prefs.getFloat("line_spacing", 1.3f)
         val softWrap = prefs.getBoolean("soft_wrap", false)
 
+        val themeName = prefs.getString("theme_mode", AppThemeMode.DARK.name)
+            ?: AppThemeMode.DARK.name
+        val themeMode = try {
+            AppThemeMode.valueOf(themeName)
+        } catch (e: Exception) {
+            AppThemeMode.DARK
+        }
         return TerminalPreferences(
             font = font,
             fontSizeSp = fontSize,
             lineSpacingMultiplier = lineSpacing,
-            softWrap = softWrap
+            softWrap = softWrap,
+            themeMode = themeMode
         )
     }
 
@@ -68,6 +83,11 @@ class TerminalPreferencesRepository(context: Context) {
         val clamped = (Math.round(sizeSp * 10f) / 10f).coerceIn(8f, 26f)
         prefs.edit().putFloat("font_size", clamped).apply()
         _preferences.value = _preferences.value.copy(fontSizeSp = clamped)
+    }
+
+    fun updateThemeMode(mode: AppThemeMode) {
+        prefs.edit().putString("theme_mode", mode.name).apply()
+        _preferences.value = _preferences.value.copy(themeMode = mode)
     }
 
     fun toggleSoftWrap() {
