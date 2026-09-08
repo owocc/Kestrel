@@ -1,13 +1,9 @@
 package com.bettershell.app.navigation
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SeekableTransitionState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.rememberTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -35,11 +31,7 @@ import kotlinx.coroutines.launch
 
 /**
  * 官方标准全栈导航容器 (Official Standard Predictive Back Navigation Host)
- * 基于 Android 官方 SeekableTransitionState 驱动：
- * 1. 彻底解决手动计算 offset 带来的松手闪回原位/白屏问题；
- * 2. 手势滑动时实时 Seek 目标转场动画（popEnter/popExit）；
- * 3. 手势确认退出时直接向终点 Snap/Animate 落地，再同步状态；
- * 4. 按钮点击退出与压栈进入均走标准 TransitionSpec，无缝统一。
+ * 基于 Android 官方 SeekableTransitionState 驱动
  */
 @Composable
 fun <T : Any> NavigationStackHost(
@@ -51,15 +43,15 @@ fun <T : Any> NavigationStackHost(
     val previousScreen = if (stack.size > 1) stack[stack.size - 2] else null
     val scope = rememberCoroutineScope()
 
-    // 官方底层 SeekableTransitionState: 专为预测性返回设计的帧精准可搜寻状态机
+    // 官方底层 SeekableTransitionState
     val seekableTransitionState = remember { SeekableTransitionState(currentScreen) }
 
-    var isGestureInProgress by remember { mutableStateOf(false) }
+    var isGestureActive by remember { mutableStateOf(false) }
     var lastRecordedDepth by remember { mutableIntStateOf(stack.size) }
 
-    // 监听栈变化：当普通点击（非手势）导致栈变化时，执行平滑转场动画
+    // 监听栈变化：当通过编程式（点击按钮）导致路由栈变化时执行平滑转场
     LaunchedEffect(currentScreen) {
-        if (!isGestureInProgress && seekableTransitionState.currentState != currentScreen) {
+        if (!isGestureActive && seekableTransitionState.currentState != currentScreen) {
             seekableTransitionState.animateTo(currentScreen)
         }
     }
@@ -67,26 +59,28 @@ fun <T : Any> NavigationStackHost(
     // 接入官方规范的 PredictiveBackHandler + SeekableTransitionState
     PredictiveBackHandler(enabled = previousScreen != null) { progressFlow: Flow<BackEventCompat> ->
         if (previousScreen == null) return@PredictiveBackHandler
-        isGestureInProgress = true
+        isGestureActive = true
         try {
             // 告诉状态机目标是上一页 previousScreen
             seekableTransitionState.seekTo(0f, targetState = previousScreen)
             progressFlow.collect { event ->
                 val progress = FastOutSlowInEasing.transform(event.progress)
-                // 核心：由系统将真实手势进度精准 Seek 进 Transition，无任何多余层与状态突变
                 seekableTransitionState.seekTo(fraction = progress, targetState = previousScreen)
             }
-            // 手势确认提交 (Commit)：继续完成剩余进度的动画，落地后触发 onPop
-            scope.launch {
-                seekableTransitionState.animateTo(targetState = previousScreen)
-                onPop()
-                isGestureInProgress = false
-            }
+            // 手势确认提交 (Commit)：继续以动画完成剩余位移，落地后执行出栈并立即对齐状态
+            seekableTransitionState.animateTo(targetState = previousScreen)
+            onPop()
+            // 关键：出栈后 currentState 已经是 previousScreen，直接 snapTo 对齐，杜绝二次触发
+            seekableTransitionState.snapTo(targetState = previousScreen)
+            isGestureActive = false
         } catch (e: CancellationException) {
-            // 手势取消：平滑倒放恢复到当前页
+            // 手势取消：平滑倒放恢复到当前页 currentScreen
+            // 关键修复：必须使用 await 方式完成倒放，确保在恢复到 currentScreen 后才标记手势结束，
+            // 绝不触发 LaunchedEffect 或反向重播！
             scope.launch {
                 seekableTransitionState.animateTo(targetState = currentScreen)
-                isGestureInProgress = false
+                seekableTransitionState.snapTo(targetState = currentScreen)
+                isGestureActive = false
             }
         }
     }
@@ -104,7 +98,7 @@ fun <T : Any> NavigationStackHost(
     ) {
         transition.AnimatedContent(
             transitionSpec = {
-                val isPopping = stack.size < lastRecordedDepth || isGestureInProgress
+                val isPopping = stack.size < lastRecordedDepth || isGestureActive
 
                 if (isPopping) {
                     // 后退/预测性返回：上一页自左侧 -30% 视差归位，当前页自 0% 向右滑出到 100%
