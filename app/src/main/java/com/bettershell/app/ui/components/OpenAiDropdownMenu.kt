@@ -20,7 +20,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -41,11 +40,11 @@ data class OpenAiMenuItemData(
 
 /**
  * 全局统一的 OpenAI 风格高立体感浮层菜单 (Unified OpenAI Dropdown Menu)
- * - 阴影：扩大 15dp 扩散投影 (elevation = 15.dp, alpha = 0.1f)
- * - 圆角：24dp
- * - 全自动深色/浅色自适应：深色模式背景 Color(0xFF1E1E1E)，浅色 Color(0xFFFFFFFF)
- * - 边框：半透明极细高品质微光描边
- * - 纯净线条图标，无背景方框，间距对齐
+ * - 容器去 padding：菜单容器自身零内边距 (padding = 0.dp)
+ * - 占满宽度：每一个 item 铺满整行宽度 (fillMaxWidth)，点击水波纹整行铺开
+ * - 去除 item 自身圆角：平铺式设计，无独立圆角胶囊块
+ * - 增加上下内边距：每一个 item 拥有舒适的上下留白 (vertical = 14.dp)
+ * - 阴影扩大：扩散与 blur 程度扩大到 20dp (elevation = 20.dp)，alpha 保持通透
  */
 @Composable
 fun OpenAiDropdownMenu(
@@ -61,7 +60,7 @@ fun OpenAiDropdownMenu(
     val borderColor = if (isDark) Color(0xFF333333) else Color(0xFFE5E7EB)
 
     MaterialTheme(
-        shapes = MaterialTheme.shapes.copy(extraSmall = RoundedCornerShape(24.dp))
+        shapes = MaterialTheme.shapes.copy(extraSmall = RoundedCornerShape(20.dp))
     ) {
         DropdownMenu(
             expanded = expanded,
@@ -70,16 +69,19 @@ fun OpenAiDropdownMenu(
             modifier = modifier
                 .width(width)
                 .shadow(
-                    elevation = 15.dp,
-                    shape = RoundedCornerShape(24.dp),
-                    spotColor = Color.Black.copy(alpha = if (isDark) 0.35f else 0.10f),
-                    ambientColor = Color.Black.copy(alpha = if (isDark) 0.25f else 0.08f)
+                    elevation = 20.dp,
+                    shape = RoundedCornerShape(20.dp),
+                    spotColor = Color.Black.copy(alpha = if (isDark) 0.38f else 0.10f),
+                    ambientColor = Color.Black.copy(alpha = if (isDark) 0.28f else 0.08f)
                 )
                 .background(menuBg)
-                .border(1.dp, borderColor.copy(alpha = if (isDark) 0.5f else 0.7f), RoundedCornerShape(24.dp))
-                .padding(vertical = 8.dp)
+                .border(1.dp, borderColor.copy(alpha = if (isDark) 0.5f else 0.7f), RoundedCornerShape(20.dp))
+                .padding(0.dp) // 容器绝对无内边距
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.Top
+            ) {
                 items.forEach { item ->
                     OpenAiDropdownMenuItemRow(
                         title = item.title,
@@ -122,13 +124,12 @@ fun OpenAiDropdownMenuItemRow(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp)
-            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp), // 占满宽度，上下边距增加为 14dp，去除 item 自身圆角
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Start
         ) {

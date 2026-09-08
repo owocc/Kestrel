@@ -445,7 +445,7 @@ fun ServerCard(
                     items = listOf(
                         OpenAiMenuItemData(
                             title = "服务器设置",
-                            icon = LucideIcons.Settings,
+                            icon = LucideIcons.Bolt,
                             onClick = onManage
                         ),
                         OpenAiMenuItemData(
@@ -519,7 +519,7 @@ fun ServerGridCard(
                         items = listOf(
                             OpenAiMenuItemData(
                                 title = "服务器设置",
-                                icon = LucideIcons.Settings,
+                                icon = LucideIcons.Bolt,
                                 onClick = onManage
                             ),
                             OpenAiMenuItemData(

@@ -789,7 +789,7 @@ fun SessionTopBar(
             menuItems.add(
                 OpenAiMenuItemData(
                     title = "服务器设置",
-                    icon = LucideIcons.Settings,
+                    icon = LucideIcons.Bolt,
                     onClick = onOpenSettings
                 )
             )
