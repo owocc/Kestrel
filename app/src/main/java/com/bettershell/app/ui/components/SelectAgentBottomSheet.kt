@@ -1,11 +1,8 @@
 package com.bettershell.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,10 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -28,21 +22,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bettershell.app.agent.DiscoveredAgent
 import com.bettershell.app.agent.SupportedAgentsCatalog
 import com.bettershell.app.ui.theme.isAppInDarkTheme
 
 /**
  * 规范化 Agent 选择底栏弹窗 (SelectAgentBottomSheet)
- * - 直接展开 2/3 屏幕高度 (fillMaxHeight(0.67f) + skipPartiallyExpanded = true)
- * - 无须二次收起/展开，无额外关闭按钮
- * - 纯净居中文案标题，无装饰图标
+ * - 严格对标 ChatGPT 权限设置截图样式：
+ *   - 拆分独立色块卡片 (CardPosition: TOP / MIDDLE / BOTTOM / SINGLE)
+ *   - 右侧标准单选圆形选中标记 (Radio Circle)
+ *   - 弹窗底部不带任何多余文本，清爽纯净
+ * - 2/3 屏幕高度直接展开，居中标题，无关闭按钮
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,7 +72,7 @@ fun SelectAgentBottomSheet(
                 .fillMaxHeight(0.67f)
                 .padding(horizontal = 20.dp)
         ) {
-            // 规范化纯净居中标题，无图标，无关闭按钮
+            // 居中标题
             Text(
                 text = "选择 Agent",
                 style = MaterialTheme.typography.titleMedium,
@@ -91,7 +84,7 @@ fun SelectAgentBottomSheet(
                     .padding(vertical = 4.dp)
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Column(
                 modifier = Modifier
@@ -102,7 +95,7 @@ fun SelectAgentBottomSheet(
             ) {
                 if (discoveredAgents.isEmpty()) {
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(22.dp),
                         color = itemBg,
                         border = BorderStroke(1.dp, itemBorder),
                         modifier = Modifier.fillMaxWidth()
@@ -120,75 +113,32 @@ fun SelectAgentBottomSheet(
                         }
                     }
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        discoveredAgents.forEach { agent ->
-                            val isSelected = selectedAgent?.id == agent.id
-                            val meta = SupportedAgentsCatalog.findMeta(agent.command)
+                    val count = discoveredAgents.size
+                    discoveredAgents.forEachIndexed { index, agent ->
+                        val isSelected = selectedAgent?.id == agent.id
+                        val meta = SupportedAgentsCatalog.findMeta(agent.command)
 
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else itemBg,
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary else itemBorder
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        onSelectAgent(agent)
-                                        onDismiss()
-                                    }
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Text(
-                                                text = meta.displayName,
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            if (agent.version.isNotBlank()) {
-                                                Text(
-                                                    text = "v${agent.version}",
-                                                    style = TextStyle(
-                                                        fontFamily = FontFamily.Monospace,
-                                                        fontSize = 11.sp,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                )
-                                            }
-                                        }
-                                        Text(
-                                            text = agent.path.ifBlank { agent.command },
-                                            style = TextStyle(
-                                                fontFamily = FontFamily.Monospace,
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                            )
-                                        )
-                                    }
-
-                                    if (isSelected) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Check,
-                                            contentDescription = "Selected",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                            }
+                        val position = when {
+                            count == 1 -> CardPosition.SINGLE
+                            index == 0 -> CardPosition.TOP
+                            index == count - 1 -> CardPosition.BOTTOM
+                            else -> CardPosition.MIDDLE
                         }
+
+                        val title = meta.displayName + if (agent.version.isNotBlank()) " v${agent.version}" else ""
+                        val subtitle = agent.path.ifBlank { agent.command }
+
+                        OpenAiRadioOptionCard(
+                            title = title,
+                            subtitle = subtitle,
+                            selected = isSelected,
+                            position = position,
+                            isDark = isDark,
+                            onClick = {
+                                onSelectAgent(agent)
+                                onDismiss()
+                            }
+                        )
                     }
                 }
             }
