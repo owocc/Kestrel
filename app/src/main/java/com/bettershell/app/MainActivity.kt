@@ -27,12 +27,10 @@ sealed interface Screen {
     data object ServerList : Screen
     data class Session(val server: ServerConfig) : Screen
 }
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
         val repository = ServerRepository(applicationContext)
         val terminalPrefsRepo = com.bettershell.app.data.TerminalPreferencesRepository(applicationContext)
         val sessionManager = com.bettershell.app.terminal.SessionManager()

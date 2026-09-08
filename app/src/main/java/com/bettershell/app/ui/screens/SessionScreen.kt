@@ -36,8 +36,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -143,8 +146,7 @@ import com.bettershell.app.ui.theme.AccentRed
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SessionScreen(
     server: ServerConfig,
@@ -193,48 +195,11 @@ fun SessionScreen(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val density = LocalDensity.current
-    val imeInsets = WindowInsets.ime
-    val currentImeBottomPx = imeInsets.getBottom(density)
-    val currentImeBottomDp = with(density) { currentImeBottomPx.toDp() }
-    val isKeyboardOpen by remember(currentImeBottomPx) {
-        derivedStateOf { currentImeBottomPx > 100 }
-    }
+    var showToolsSheet by remember { mutableStateOf(false) }
+    val navBottomDp = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
+    val isImeVisible = WindowInsets.isImeVisible
+    val bottomNavPadding = if (isImeVisible) 0.dp else navBottomDp
 
-    val configuration = LocalConfiguration.current
-    val screenHeightDp = configuration.screenHeightDp.dp
-    val halfScreenHeightDp = screenHeightDp * 0.5f
-
-    // Dynamically track user's real soft keyboard height (starts at 290dp)
-    // Guarded to only update when keyboard is fully open (> 200dp) to prevent closing-animation corruption!
-    var keyboardHeightDp by remember { mutableStateOf(290.dp) }
-    LaunchedEffect(currentImeBottomDp) {
-        if (currentImeBottomDp > 200.dp && currentImeBottomDp > keyboardHeightDp) {
-            keyboardHeightDp = currentImeBottomDp
-        }
-    }
-    var isToolsOpen by remember { mutableStateOf(false) }
-    var isExpandedHalfScreen by remember { mutableStateOf(false) }
-
-    val toolsTargetHeightDp = if (isExpandedHalfScreen) halfScreenHeightDp else keyboardHeightDp
-
-    // When tools are open OR keyboard is open: maintain keyboard height underneath with ZERO collapse animation!
-    // Only animate down to 0 when NEITHER keyboard nor tools are active!
-    val targetToolsHeight = when {
-        isToolsOpen -> toolsTargetHeightDp
-        isKeyboardOpen -> keyboardHeightDp
-        else -> 0.dp
-    }
-
-    val animatedToolsHeightDp by animateDpAsState(
-        targetValue = targetToolsHeight,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "toolsHeight"
-    )
-
-    val bottomContainerHeight = maxOf(currentImeBottomDp, animatedToolsHeightDp)
     // Hierarchical back handling
     BackHandler(enabled = true) {
         when {
@@ -247,15 +212,15 @@ fun SessionScreen(
             showServerSettingsSheet -> {
                 showServerSettingsSheet = false
             }
+            showToolsSheet -> {
+                showToolsSheet = false
+            }
             isExpandedInput -> {
                 isExpandedInput = false
             }
-            isKeyboardOpen -> {
+            isImeVisible -> {
                 focusManager.clearFocus()
                 keyboardController?.hide()
-            }
-            isToolsOpen -> {
-                isToolsOpen = false
             }
             else -> {
                 onBack()
@@ -269,7 +234,6 @@ fun SessionScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
-            .navigationBarsPadding()
     ) {
         // Layer 1: Shell & Terminal Layer (Underneath)
         Column(
@@ -451,7 +415,10 @@ fun SessionScreen(
             if (!isExpandedInput) {
                 // Default State & Tool Drawer (Image #1, #2, #3, #4)
                 Column(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .padding(bottom = bottomNavPadding)
                 ) {
                     // Quick Shortcut Bar (ENTER, ESC, TAB, CTRL-C, CTRL-D, Arrows)
                     QuickShortcutBar(
@@ -463,24 +430,15 @@ fun SessionScreen(
                     GoogleMessagesInputBar(
                         text = inputText,
                         onTextChanged = { inputText = it },
-                        isToolsExpanded = isToolsOpen && !isKeyboardOpen,
+                        isToolsExpanded = showToolsSheet,
                         onToggleTools = {
-                            if (!isToolsOpen) {
-                                focusManager.clearFocus()
-                                keyboardController?.hide()
-                                isToolsOpen = true
-                            } else {
-                                isToolsOpen = false
-                                isExpandedHalfScreen = false
-                            }
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                            showToolsSheet = true
                         },
                         onExpandInput = { isExpandedInput = true },
                         onInputFocused = {
-                            if (isToolsOpen) {
-                                // Only change button state! Zero collapse animation!
-                                isToolsOpen = false
-                                isExpandedHalfScreen = false
-                            }
+                            // Focus in textfield
                         },
                         onSend = {
                             if (inputText.isNotBlank()) {
@@ -489,66 +447,35 @@ fun SessionScreen(
                             }
                         }
                     )
-
-                    // Z-axis Overlap Placeholder Container
-                    if (bottomContainerHeight > 0.dp) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(bottomContainerHeight)
-                        ) {
-                            val shouldRenderTools = (isToolsOpen || isKeyboardOpen) && bottomContainerHeight > 20.dp
-                            if (shouldRenderTools) {
-                                val toolsAlpha = if (currentImeBottomDp > 30.dp) 0f else 1f
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .alpha(toolsAlpha)
-                                ) {
-                                    GoogleMessagesToolsDrawer(
-                                        onDragDelta = { delta ->
-                                            if (delta > 25f) {
-                                                isToolsOpen = false
-                                                isExpandedHalfScreen = false
-                                            } else if (delta < -25f) {
-                                                isExpandedHalfScreen = true
-                                            }
-                                        },
-                                        onDragEnd = {},
-                                        onToggleExpand = {
-                                            isExpandedHalfScreen = !isExpandedHalfScreen
-                                        },
-                                        hasStartupScript = currentServer.startupScript.isNotBlank(),
-                                        onRunStartupScript = {
-                                            if (currentServer.startupScript.isNotBlank()) {
-                                                for (line in currentServer.startupScript.lines().filter { it.isNotBlank() && !it.startsWith("#") }) {
-                                                    terminalSession.sendCommand(line)
-                                                }
-                                            }
-                                            isToolsOpen = false
-                                            isExpandedHalfScreen = false
-                                        },
-                                        onInsertCommand = { cmd ->
-                                            inputText = cmd
-                                            isToolsOpen = false
-                                            isExpandedHalfScreen = false
-                                        },
-                                        onInsertSymbol = { sym ->
-                                            inputText += sym
-                                        },
-                                        onClearTerminal = {
-                                            terminalSession.clearScreen()
-                                            isToolsOpen = false
-                                            isExpandedHalfScreen = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
+    }
+    // Material 3 Standard Tools Modal Bottom Sheet
+    if (showToolsSheet) {
+        ToolsBottomSheet(
+            hasStartupScript = currentServer.startupScript.isNotBlank(),
+            onRunStartupScript = {
+                if (currentServer.startupScript.isNotBlank()) {
+                    for (line in currentServer.startupScript.lines().filter { it.isNotBlank() && !it.startsWith("#") }) {
+                        terminalSession.sendCommand(line)
+                    }
+                }
+                showToolsSheet = false
+            },
+            onInsertCommand = { cmd ->
+                inputText = cmd
+                showToolsSheet = false
+            },
+            onInsertSymbol = { sym ->
+                inputText += sym
+            },
+            onClearTerminal = {
+                terminalSession.clearScreen()
+                showToolsSheet = false
+            },
+            onDismiss = { showToolsSheet = false }
+        )
     }
 
     // Session Switcher Bottom Sheet
@@ -778,39 +705,64 @@ fun GoogleMessagesInputBar(
     onInputFocused: () -> Unit = {},
     onSend: () -> Unit
 ) {
+    val plusRotation by animateFloatAsState(
+        targetValue = if (isToolsExpanded) 45f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "plusRotation"
+    )
+
+    val hasText = text.isNotBlank()
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, bottom = 8.dp, top = 2.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Left: Circular '+' Button (Toggles Tools Drawer, turns to '×' when open)
+        // Left: Circular Action Button ('+' with smooth 45° rotation into '×' when expanded)
         Box(
             modifier = Modifier
-                .size(46.dp)
+                .size(48.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                .background(
+                    if (isToolsExpanded) MaterialTheme.colorScheme.secondaryContainer
+                    else MaterialTheme.colorScheme.surfaceVariant
+                )
+                .border(
+                    1.dp,
+                    if (isToolsExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                    CircleShape
+                )
                 .clickable(onClick = onToggleTools),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (isToolsExpanded) Icons.Rounded.Close else Icons.Rounded.Add,
+                imageVector = Icons.Rounded.Add,
                 contentDescription = "工具与指令",
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(22.dp)
+                tint = if (isToolsExpanded) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .size(22.dp)
+                    .rotate(plusRotation)
             )
         }
 
-        // Center: Full-round pill input container (全圆角)
+        // Center: Full-round pill input container (Google Messages style)
         Box(
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = 46.dp, max = 110.dp)
-                .clip(RoundedCornerShape(24.dp))
+                .heightIn(min = 48.dp, max = 120.dp)
+                .clip(RoundedCornerShape(26.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp))
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                    RoundedCornerShape(26.dp)
+                )
                 .clickable { onInputFocused() }
                 .padding(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
             contentAlignment = Alignment.CenterStart
@@ -825,11 +777,11 @@ fun GoogleMessagesInputBar(
                 ) {
                     if (text.isEmpty()) {
                         Text(
-                            text = "输入指令发送到 Agent 终端...",
+                            text = "输入 Shell 命令...",
                             style = TextStyle(
                                 fontFamily = FontFamily.Default,
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontSize = 14.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                             ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -852,14 +804,13 @@ fun GoogleMessagesInputBar(
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium
                         ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { onSend() })
                     )
                 }
 
-                // Trailing Expand Button (Positioned at Emoji location as requested by user in Image #4/#5!)
-                // Visible when text has content or multi-line
+                // Trailing Expand Button (Positioned at Emoji location)
                 if (text.isNotEmpty()) {
                     IconButton(
                         onClick = onExpandInput,
@@ -867,37 +818,42 @@ fun GoogleMessagesInputBar(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.OpenInFull,
-                            contentDescription = "展开全屏输入",
+                            contentDescription = "展开多行编辑器",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(17.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
         }
 
-        // Right: Circular Send Button
+        // Right: Circular Send Button with active tint & feedback
         Box(
             modifier = Modifier
-                .size(46.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(
-                    if (text.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                    if (hasText) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceVariant
                 )
-                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                .clickable(enabled = text.isNotBlank(), onClick = onSend),
+                .border(
+                    1.dp,
+                    if (hasText) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                    CircleShape
+                )
+                .clickable(enabled = hasText, onClick = onSend),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.Send,
-                contentDescription = "Send",
-                tint = if (text.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(19.dp)
+                contentDescription = "发送命令",
+                tint = if (hasText) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.size(20.dp)
             )
         }
     }
 }
-
 /**
  * Expanded Input Sheet (Image #5 / #6)
  * - Layered over bottom ~55% of the screen (terminal remains visible in top ~45%)
@@ -1050,16 +1006,15 @@ data class ToolItemData(
  * - Nested scrolling: scroll through all tools, drag down at top to close drawer
  * - Long-press drag-and-drop reordering for tools
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GoogleMessagesToolsDrawer(
-    onDragDelta: (Float) -> Unit,
-    onDragEnd: () -> Unit,
-    onToggleExpand: () -> Unit,
+fun ToolsBottomSheet(
     hasStartupScript: Boolean,
     onRunStartupScript: () -> Unit,
     onInsertCommand: (String) -> Unit,
     onInsertSymbol: (String) -> Unit,
-    onClearTerminal: () -> Unit
+    onClearTerminal: () -> Unit,
+    onDismiss: () -> Unit
 ) {
     var isReorderMode by remember { mutableStateOf(false) }
     var toolsList by remember {
@@ -1087,83 +1042,51 @@ fun GoogleMessagesToolsDrawer(
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     val gridState = rememberLazyGridState()
-    LaunchedEffect(Unit) {
-        gridState.scrollToItem(0)
-    }
 
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 0.dp
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp)
         ) {
-            // Header Bar: status, drag handle, reorder toggle
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isReorderMode) {
-                    Text(
-                        text = "拖拽卡片以调整顺序",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AccentOrange,
-                        fontWeight = FontWeight.Bold
-                    )
-                } else {
-                    Spacer(modifier = Modifier.width(60.dp))
-                }
+                Text(
+                    text = if (isReorderMode) "长按卡片拖拽调整" else "快捷工具与指令",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isReorderMode) AccentOrange else MaterialTheme.colorScheme.onSurface
+                )
 
-                // Center Drag Handle (touch to drag down, click to toggle 1/2 screen height)
-                Box(
-                    modifier = Modifier
-                        .pointerInput(Unit) {
-                            detectVerticalDragGestures(
-                                onVerticalDrag = { _, dragAmount -> onDragDelta(dragAmount) },
-                                onDragEnd = { onDragEnd() }
-                            )
-                        }
-                        .clickable(onClick = onToggleExpand)
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(44.dp)
-                            .height(5.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-                    )
-                }
-
-                // Right: Reorder mode toggle button
                 Text(
                     text = if (isReorderMode) "完成" else "自定义排序",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (isReorderMode) AccentGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isReorderMode) AccentGreen else MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { isReorderMode = !isReorderMode }
-                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
 
-            // LazyVerticalGrid: native 3-column scrollable grid!
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = gridState,
                 modifier = Modifier
-                    .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                contentPadding = PaddingValues(top = 4.dp, bottom = 28.dp),
+                    .heightIn(max = 380.dp),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
@@ -1258,22 +1181,31 @@ fun ToolGridItem(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(54.dp)
+                .size(56.dp)
                 .clip(CircleShape)
                 .background(
                     when {
-                        highlight -> MaterialTheme.colorScheme.primary
-                        isReordering -> AccentOrange.copy(alpha = 0.2f)
+                        highlight -> MaterialTheme.colorScheme.primaryContainer
+                        isReordering -> AccentOrange.copy(alpha = 0.18f)
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     }
+                )
+                .border(
+                    1.dp,
+                    when {
+                        highlight -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                        isReordering -> AccentOrange.copy(alpha = 0.6f)
+                        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                    },
+                    CircleShape
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -1281,7 +1213,7 @@ fun ToolGridItem(
                 imageVector = icon,
                 contentDescription = label,
                 tint = when {
-                    highlight -> MaterialTheme.colorScheme.onPrimary
+                    highlight -> MaterialTheme.colorScheme.onPrimaryContainer
                     isReordering -> AccentOrange
                     else -> MaterialTheme.colorScheme.onSurface
                 },
@@ -1294,8 +1226,10 @@ fun ToolGridItem(
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 11.sp,
-            textAlign = TextAlign.Center
+            fontSize = 11.5.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -1308,21 +1242,26 @@ fun QuickShortcutBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(horizontal = 12.dp, vertical = 3.dp)
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         QuickKeyChip(label = "回车 ↵", isHighlight = true) { onSendRaw(byteArrayOf(13)) }
-        QuickKeyChip(label = "ESC") { onSendRaw(byteArrayOf(27)) }
         QuickKeyChip(label = "TAB ⇥") { onSendRaw(byteArrayOf(9)) }
+        QuickKeyChip(label = "ESC") { onSendRaw(byteArrayOf(27)) }
         QuickKeyChip(label = "Ctrl+C", isDanger = true) { onSendRaw(byteArrayOf(3)) }
         QuickKeyChip(label = "Ctrl+D") { onSendRaw(byteArrayOf(4)) }
+        QuickKeyChip(label = "Ctrl+Z") { onSendRaw(byteArrayOf(26)) }
+        QuickKeyChip(label = "Ctrl+L") { onSendRaw(byteArrayOf(12)) }
         QuickKeyChip(label = "↑") { onSendRaw(byteArrayOf(27, 91, 65)) }
         QuickKeyChip(label = "↓") { onSendRaw(byteArrayOf(27, 91, 66)) }
-        QuickKeyChip(label = "CLEAR") { onInsertText("clear\n") }
+        QuickKeyChip(label = "←") { onSendRaw(byteArrayOf(27, 91, 68)) }
+        QuickKeyChip(label = "→") { onSendRaw(byteArrayOf(27, 91, 67)) }
         QuickKeyChip(label = "|") { onInsertText(" | ") }
+        QuickKeyChip(label = "&&") { onInsertText(" && ") }
         QuickKeyChip(label = "~/") { onInsertText("~/") }
+        QuickKeyChip(label = "CLEAR") { onInsertText("clear\n") }
     }
 }
 
@@ -1333,36 +1272,42 @@ fun QuickKeyChip(
     isHighlight: Boolean = false,
     onClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (isHighlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-            .border(
-                1.dp,
-                when {
-                    isHighlight -> MaterialTheme.colorScheme.primary
-                    isDanger -> AccentRed.copy(alpha = 0.5f)
-                    else -> MaterialTheme.colorScheme.outline
-                },
-                RoundedCornerShape(8.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        contentAlignment = Alignment.Center
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        color = when {
+            isHighlight -> MaterialTheme.colorScheme.primaryContainer
+            isDanger -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+        },
+        border = BorderStroke(
+            1.dp,
+            when {
+                isHighlight -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                isDanger -> MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+            }
+        ),
+        shadowElevation = 0.dp
     ) {
-        Text(
-            text = label,
-            style = TextStyle(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = when {
-                    isHighlight -> MaterialTheme.colorScheme.onPrimary
-                    isDanger -> AccentRed
-                    else -> MaterialTheme.colorScheme.onSurface
-                }
+        Box(
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                style = TextStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = when {
+                        isHighlight -> MaterialTheme.colorScheme.onPrimaryContainer
+                        isDanger -> MaterialTheme.colorScheme.onErrorContainer
+                        else -> MaterialTheme.colorScheme.onSurface
+                    }
+                )
             )
-        )
+        }
     }
 }
 

@@ -36,9 +36,9 @@ data class TerminalPreferences(
     val fontSizeSp: Float = 12f,
     val lineSpacingMultiplier: Float = 1.3f,
     val softWrap: Boolean = false, // 默认不换行，支持横向滚动保持 CLI 表格完整排版
-    val themeMode: AppThemeMode = AppThemeMode.DARK
+    val themeMode: AppThemeMode = AppThemeMode.DARK,
+    val cachedKeyboardHeightPx: Int = 0
 )
-
 class TerminalPreferencesRepository(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("terminal_preferences", Context.MODE_PRIVATE)
@@ -70,7 +70,8 @@ class TerminalPreferencesRepository(context: Context) {
             fontSizeSp = fontSize,
             lineSpacingMultiplier = lineSpacing,
             softWrap = softWrap,
-            themeMode = themeMode
+            themeMode = themeMode,
+            cachedKeyboardHeightPx = prefs.getInt("cached_keyboard_height_px", 0)
         )
     }
 
@@ -95,7 +96,12 @@ class TerminalPreferencesRepository(context: Context) {
         prefs.edit().putBoolean("soft_wrap", newValue).apply()
         _preferences.value = _preferences.value.copy(softWrap = newValue)
     }
-
+    fun updateCachedKeyboardHeight(heightPx: Int) {
+        if (heightPx > 200 && heightPx != _preferences.value.cachedKeyboardHeightPx) {
+            prefs.edit().putInt("cached_keyboard_height_px", heightPx).apply()
+            _preferences.value = _preferences.value.copy(cachedKeyboardHeightPx = heightPx)
+        }
+    }
     fun updatePreferences(newPrefs: TerminalPreferences) {
         prefs.edit()
             .putString("font", newPrefs.font.name)
