@@ -48,7 +48,7 @@ sealed interface Screen {
     data class SingleAgentConfig(val server: ServerConfig, val agent: DiscoveredAgent) : Screen
     data class ServerStartupScript(val server: ServerConfig) : Screen
     data class Session(val server: ServerConfig) : Screen
-    data class RawLogs(val server: ServerConfig, val logs: String) : Screen
+    data class LogScreen(val server: ServerConfig, val rawLogs: String, val eventLogs: List<com.bettershell.app.terminal.AgentEventLogItem>) : Screen
 }
 
 class MainActivity : ComponentActivity() {
@@ -206,8 +206,8 @@ class MainActivity : ComponentActivity() {
                                     repository = repository,
                                     sessionManager = sessionManager,
                                     prefsRepository = terminalPrefsRepo,
-                                    onOpenRawLogs = { logsText ->
-                                        pushScreen(Screen.RawLogs(screen.server, logsText))
+                                    onOpenLogsScreen = { raw, events ->
+                                        pushScreen(Screen.LogScreen(screen.server, raw, events))
                                     },
                                     onOpenServerSettings = {
                                         pushScreen(Screen.ServerSettings(screen.server, fromSession = true))
@@ -215,9 +215,10 @@ class MainActivity : ComponentActivity() {
                                     onBack = onBackAction
                                 )
                             }
-                            is Screen.RawLogs -> {
-                                RawLogsScreen(
-                                    rawLogs = screen.logs,
+                            is Screen.LogScreen -> {
+                                com.bettershell.app.ui.screens.LogScreen(
+                                    rawLogs = screen.rawLogs,
+                                    eventLogs = screen.eventLogs,
                                     onBack = onBackAction
                                 )
                             }

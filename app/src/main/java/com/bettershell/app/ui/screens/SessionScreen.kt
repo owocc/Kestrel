@@ -178,7 +178,7 @@ fun SessionScreen(
     repository: ServerRepository,
     sessionManager: SessionManager,
     prefsRepository: TerminalPreferencesRepository,
-    onOpenRawLogs: (logs: String) -> Unit = {},
+    onOpenLogsScreen: (rawLogs: String, eventLogs: List<com.bettershell.app.terminal.AgentEventLogItem>) -> Unit = { _, _ -> },
     onOpenServerSettings: () -> Unit = {},
     onBack: () -> Unit
 ) {
@@ -223,7 +223,6 @@ fun SessionScreen(
     var isExpandedInput by remember { mutableStateOf(false) }
     var showServerSettingsSheet by remember { mutableStateOf(false) }
     var showSessionSwitcherSheet by remember { mutableStateOf(false) }
-    var showAgentLogsSheet by remember { mutableStateOf(false) }
     var sessionToRename by remember { mutableStateOf<ServerSessionItem?>(null) }
     var showFontSizeIndicator by remember { mutableStateOf(false) }
     var indicatorDismissJob by remember { mutableStateOf<Job?>(null) }
@@ -328,7 +327,9 @@ fun SessionScreen(
                     onBack()
                 },
                 onTitleClick = { showSessionSwitcherSheet = true },
-                onViewLogs = { showAgentLogsSheet = true },
+                onViewLogs = {
+                    onOpenLogsScreen(agentRawLogs, agentEventLogs)
+                },
                 onReconnect = {
                     if (currentMode == SessionMode.WORK) chatTerminalSession.connect()
                     else shellTerminalSession.connect()
@@ -602,17 +603,6 @@ fun SessionScreen(
         )
     }
 
-    // Chat 日志查看弹窗 (仿 Multica 一行一个事件流，并支持打开纯文本页面)
-    if (showAgentLogsSheet) {
-        AgentLogsBottomSheet(
-            eventLogs = agentEventLogs,
-            onOpenRawLogsPage = {
-                showAgentLogsSheet = false
-                onOpenRawLogs(agentRawLogs)
-            },
-            onDismiss = { showAgentLogsSheet = false }
-        )
-    }
     // 1. 独立 Agent 选择弹窗
     if (showSelectAgentSheet) {
         com.bettershell.app.ui.components.SelectAgentBottomSheet(
@@ -779,9 +769,8 @@ fun SessionTopBar(
             )
             menuItems.add(
                 OpenAiMenuItemData(
-                    title = "查看 Chat 原始日志",
+                    title = "日志",
                     icon = LucideIcons.Code2,
-                    iconTint = AccentCyan,
                     onClick = onViewLogs
                 )
             )

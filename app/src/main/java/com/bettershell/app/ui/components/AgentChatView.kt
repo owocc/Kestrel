@@ -242,12 +242,12 @@ fun MulticaTimelineSection(
     steps: List<ExecutionStep>,
     isStreaming: Boolean
 ) {
-    var isExpanded by remember(isStreaming) { mutableStateOf(isStreaming) }
+    var isExpanded by remember { mutableStateOf(false) } // 默认折叠，保持界面干净清爽
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 36.dp, end = 8.dp)
+            .padding(horizontal = 0.dp) // 去除左侧边距，左侧平铺对齐
     ) {
         // Trigger Row: 类似 Multica 的 `chevron + 3 steps`
         Row(
