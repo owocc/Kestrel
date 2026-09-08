@@ -56,7 +56,7 @@ fun SingleAgentConfigScreen(
     onBack: () -> Unit
 ) {
     val meta = SupportedAgentsCatalog.findMeta(agent.command)
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.bettershell.app.ui.theme.isAppInDarkTheme
 
     var currentAgent by remember(agent.id) { mutableStateOf(agent) }
 

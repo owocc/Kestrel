@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bettershell.app.ui.theme.isAppInDarkTheme
 
 /**
  * 规范化统一页头 (对齐 OpenAI 极简 Header 规范):
@@ -35,7 +36,7 @@ fun StandardPageHeader(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    isDark: Boolean = MaterialTheme.colorScheme.background.red < 0.5f,
+    isDark: Boolean = isAppInDarkTheme,
     showSave: Boolean = false,
     onSave: (() -> Unit)? = null
 ) {

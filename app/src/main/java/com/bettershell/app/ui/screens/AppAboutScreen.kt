@@ -1,7 +1,6 @@
 package com.bettershell.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -22,15 +21,13 @@ import com.bettershell.app.ui.components.StandardPageHeader
 
 /**
  * 独立的关于页面 (单独进入栈，享受全局预见式返回):
- * - 版本信息
- * - 协议与架构
+ * - 完全复用全局通用的 OpenAiSectionCard 和 OpenAiSettingRow
+ * - 100% 自动对齐全局主题设置，杜绝白块
  */
 @Composable
 fun AppAboutScreen(
     onBack: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -39,8 +36,7 @@ fun AppAboutScreen(
     ) {
         StandardPageHeader(
             title = "关于",
-            onBack = onBack,
-            isDark = isDark
+            onBack = onBack
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -54,28 +50,24 @@ fun AppAboutScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             OpenAiSectionCard(
-                headerTitle = "应用信息",
-                isDark = isDark
+                headerTitle = "应用信息"
             ) {
                 OpenAiSettingRow(
                     title = "BetterShell",
                     subtitle = "版本: 1.0 (Android 16 Ready)",
-                    showDivider = true,
-                    isDark = isDark
+                    showDivider = true
                 )
 
                 OpenAiSettingRow(
                     title = "核心引擎",
                     subtitle = "omp (Oh My Pi) & Multica 多 Agent 架构",
-                    showDivider = true,
-                    isDark = isDark
+                    showDivider = true
                 )
 
                 OpenAiSettingRow(
                     title = "开源协议",
                     subtitle = "Apache License 2.0",
-                    showDivider = false,
-                    isDark = isDark
+                    showDivider = false
                 )
             }
 

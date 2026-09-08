@@ -56,7 +56,7 @@ fun ServerBasicSettingsScreen(
     onSaveServer: (ServerConfig) -> Unit,
     onBack: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.bettershell.app.ui.theme.isAppInDarkTheme
 
     var name by remember { mutableStateOf(server.name) }
     var host by remember { mutableStateOf(server.host) }

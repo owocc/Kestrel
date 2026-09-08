@@ -44,7 +44,7 @@ fun ServerAgentSettingsScreen(
     onNavigateToSingleAgent: (DiscoveredAgent) -> Unit,
     onBack: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.bettershell.app.ui.theme.isAppInDarkTheme
     val discoveredAgents by remember(server.id) {
         mutableStateOf(agentDiscoveryRepo.getCachedAgents(server.id))
     }

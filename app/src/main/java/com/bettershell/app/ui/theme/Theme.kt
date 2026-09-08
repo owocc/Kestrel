@@ -6,19 +6,33 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.bettershell.app.data.AppThemeMode
+
+/**
+ * 全局统一设计系统标记：当前是否处于深色模式
+ */
+val LocalAppIsDark = staticCompositionLocalOf { true }
+
+val isAppInDarkTheme: Boolean
+    @Composable
+    @ReadOnlyComposable
+    get() = LocalAppIsDark.current
 
 private val DarkColorScheme = darkColorScheme(
     primary = DarkPrimary,
     onPrimary = DarkOnPrimary,
     secondary = DarkSecondary,
     background = TerminalBlack,
-    surface = DarkSurface,
-    surfaceVariant = DarkSurfaceVariant,
+    surface = Color(0xFF1E1E1E), // 严格对应统一 OpenAI 卡片深色背景
+    surfaceVariant = Color(0xFF262626),
     onBackground = DarkOnSurface,
     onSurface = DarkOnSurface,
     onSurfaceVariant = DarkOnSurfaceVariant,
@@ -30,8 +44,8 @@ private val LightColorScheme = lightColorScheme(
     onPrimary = LightOnPrimary,
     secondary = LightSecondary,
     background = TerminalLight,
-    surface = LightSurface,
-    surfaceVariant = LightSurfaceVariant,
+    surface = Color(0xFFF3F4F6), // 严格对应统一 OpenAI 卡片浅色背景
+    surfaceVariant = Color(0xFFE5E7EB),
     onBackground = LightOnSurface,
     onSurface = LightOnSurface,
     onSurfaceVariant = LightOnSurfaceVariant,
@@ -64,9 +78,11 @@ fun BetterShellTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = AppTypography,
-        content = content
-    )
+    CompositionLocalProvider(LocalAppIsDark provides isDark) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = AppTypography,
+            content = content
+        )
+    }
 }

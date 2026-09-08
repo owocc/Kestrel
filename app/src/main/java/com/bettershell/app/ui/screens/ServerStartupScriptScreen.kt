@@ -1,7 +1,6 @@
 package com.bettershell.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -22,16 +21,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.ui.components.OpenAiSectionCard
 import com.bettershell.app.ui.components.StandardPageHeader
 
 /**
- * 独立的服务器启动脚本配置页面 (单独压入栈，带保存圆钮，支持预见式返回)
+ * 独立的服务器启动脚本配置页面 (完全复用全局通用的 OpenAiSectionCard)
  */
 @Composable
 fun ServerStartupScriptScreen(
@@ -39,11 +35,10 @@ fun ServerStartupScriptScreen(
     onSaveServer: (ServerConfig) -> Unit,
     onBack: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
     var startupScript by remember { mutableStateOf(server.startupScript) }
 
     fun doSave() {
-        onSaveServer(server.copy(startupScript = startupScript))
+        onSaveServer(server.copy(startupScript = startupScript.trim()))
         onBack()
     }
 
@@ -56,7 +51,6 @@ fun ServerStartupScriptScreen(
         StandardPageHeader(
             title = "启动脚本设置",
             onBack = onBack,
-            isDark = isDark,
             showSave = true,
             onSave = { doSave() }
         )
@@ -69,32 +63,25 @@ fun ServerStartupScriptScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             OpenAiSectionCard(
-                headerTitle = "自动执行 Shell 脚本",
-                isDark = isDark
+                headerTitle = "自动执行 Shell 脚本"
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "每次进入 SSH 终端会话后，会自动逐行注入执行这些 Shell 指令：",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
                     OutlinedTextField(
                         value = startupScript,
                         onValueChange = { startupScript = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(280.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.5.sp)
+                        label = { Text("连接建立后执行的 Shell 命令") },
+                        placeholder = { Text("例如：tmux attach || tmux new -s work") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 6,
+                        shape = RoundedCornerShape(12.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(28.dp))
         }
     }
 }

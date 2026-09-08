@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bettershell.app.ui.theme.isAppInDarkTheme
 
 data class OpenAiMenuItemData(
     val title: String,
@@ -40,9 +41,9 @@ data class OpenAiMenuItemData(
 
 /**
  * 全局统一的 OpenAI 风格高立体感浮层菜单 (Unified OpenAI Dropdown Menu)
- * - 阴影：扩大的柔和 15dp 扩散投影 (elevation = 15.dp, alpha = 0.1f)
+ * - 阴影：扩大 15dp 扩散投影 (elevation = 15.dp, alpha = 0.1f)
  * - 圆角：24dp
- * - 全自动深色/浅色自适应：深色模式背景采用 Color(0xFF1E1E1E)，浅色采用 Color(0xFFFFFFFF)
+ * - 全自动深色/浅色自适应：深色模式背景 Color(0xFF1E1E1E)，浅色 Color(0xFFFFFFFF)
  * - 边框：半透明极细高品质微光描边
  * - 纯净线条图标，无背景方框，间距对齐
  */
@@ -52,7 +53,7 @@ fun OpenAiDropdownMenu(
     onDismissRequest: () -> Unit,
     items: List<OpenAiMenuItemData>,
     modifier: Modifier = Modifier,
-    isDark: Boolean = MaterialTheme.colorScheme.background.red < 0.5f,
+    isDark: Boolean = isAppInDarkTheme,
     offset: DpOffset = DpOffset(0.dp, 0.dp),
     width: Dp = 210.dp
 ) {
@@ -104,7 +105,7 @@ fun OpenAiDropdownMenuItemRow(
     modifier: Modifier = Modifier,
     iconTint: Color? = null,
     isDestructive: Boolean = false,
-    isDark: Boolean = MaterialTheme.colorScheme.background.red < 0.5f,
+    isDark: Boolean = isAppInDarkTheme,
     onClick: () -> Unit
 ) {
     val defaultIconColor = if (isDark) Color(0xFFE5E7EB) else Color(0xFF262626)

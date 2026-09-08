@@ -35,7 +35,7 @@ fun AppFontSettingsScreen(
     onBack: () -> Unit
 ) {
     val prefs by prefsRepository.preferences.collectAsState()
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.bettershell.app.ui.theme.isAppInDarkTheme
 
     Column(
         modifier = Modifier

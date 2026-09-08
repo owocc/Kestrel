@@ -27,17 +27,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bettershell.app.ui.theme.isAppInDarkTheme
 
 /**
- * 完整对齐 OpenAI / ChatGPT 规范的分组色块卡片 (Section Group Card)
- * - 自动检测深色/浅色：深色采用深黑灰 #1E1E1E，浅色采用纯净浅灰 #F3F4F6
- * - 大圆角 RoundedCornerShape(22.dp)
- * - 组内包含多行条目，条目间带有优雅细分割线
+ * 全局通用 OpenAI / 设置风格分组卡片 (Universal Section Card)
+ * - 全自动根据 App 当前主题自适应：深色纯正 #1E1E1E，浅色纯正 #F3F4F6
+ * - 22dp 大圆角容器
+ * - 供【关于页面】、【设置页面】、【服务器设置】、【Agent配置】等全量页面复用！
  */
 @Composable
 fun OpenAiSectionCard(
     modifier: Modifier = Modifier,
-    isDark: Boolean = MaterialTheme.colorScheme.background.red < 0.5f,
+    isDark: Boolean = isAppInDarkTheme,
     headerTitle: String? = null,
     content: @Composable () -> Unit
 ) {
@@ -68,8 +69,8 @@ fun OpenAiSectionCard(
 }
 
 /**
- * 行条目组件 (Setting Row Item)
- * - 全自动深色/浅色适配：文字、副标题、图标、分割线颜色全自适应
+ * 全局通用设置与详情行条目 (Universal Setting Row Item)
+ * - 自动自适应深色/浅色高保真文字与图标颜色
  */
 @Composable
 fun OpenAiSettingRow(
@@ -79,7 +80,7 @@ fun OpenAiSettingRow(
     icon: ImageVector? = null,
     iconTint: Color = MaterialTheme.colorScheme.onSurface,
     showDivider: Boolean = true,
-    isDark: Boolean = MaterialTheme.colorScheme.background.red < 0.5f,
+    isDark: Boolean = isAppInDarkTheme,
     trailingText: String? = null,
     showDropdownArrow: Boolean = false,
     showChevron: Boolean = false,
