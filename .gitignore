@@ -7,5 +7,6 @@
 /*/build
 .kotlin
 *.png
+!app/src/main/res/**/*.png
 *.apk
 *.aab
