@@ -282,6 +282,7 @@ fun SessionScreen(
                         }
                     }
                 },
+                onSendEnter = { terminalSession.sendRaw(byteArrayOf(13)) },
                 hasStartupScript = currentServer.startupScript.isNotBlank()
             )
         }
@@ -758,6 +759,7 @@ fun QuickShortcutBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        QuickKeyChip(label = "回车 ↵", isHighlight = true) { onSendRaw(byteArrayOf(13)) }
         QuickKeyChip(label = "ESC") { onSendRaw(byteArrayOf(27)) }
         QuickKeyChip(label = "TAB ⇥") { onSendRaw(byteArrayOf(9)) }
         QuickKeyChip(label = "Ctrl+C", isDanger = true) { onSendRaw(byteArrayOf(3)) }
@@ -774,13 +776,22 @@ fun QuickShortcutBar(
 fun QuickKeyChip(
     label: String,
     isDanger: Boolean = false,
+    isHighlight: Boolean = false,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(DarkSurfaceVariant)
-            .border(1.dp, if (isDanger) AccentRed.copy(alpha = 0.5f) else DarkOutline, RoundedCornerShape(8.dp))
+            .background(if (isHighlight) DarkPrimary else DarkSurfaceVariant)
+            .border(
+                1.dp,
+                when {
+                    isHighlight -> DarkPrimary
+                    isDanger -> AccentRed.copy(alpha = 0.5f)
+                    else -> DarkOutline
+                },
+                RoundedCornerShape(8.dp)
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 5.dp),
         contentAlignment = Alignment.Center
@@ -790,8 +801,12 @@ fun QuickKeyChip(
             style = TextStyle(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isDanger) AccentRed else DarkOnSurface
+                fontWeight = FontWeight.Bold,
+                color = when {
+                    isHighlight -> Color(0xFF111827)
+                    isDanger -> AccentRed
+                    else -> DarkOnSurface
+                }
             )
         )
     }
@@ -806,6 +821,7 @@ fun ExpandableInputPanel(
     onSend: () -> Unit,
     onQuickPrompt: (String) -> Unit,
     onRunStartupScript: () -> Unit,
+    onSendEnter: () -> Unit = {},
     hasStartupScript: Boolean
 ) {
     val animatedHeight by animateDpAsState(
@@ -854,6 +870,7 @@ fun ExpandableInputPanel(
                     onTextChanged = onTextChanged,
                     onToggleExpand = onToggleExpand,
                     onSend = onSend,
+                    onSendEnter = onSendEnter,
                     onQuickPrompt = onQuickPrompt,
                     onRunStartupScript = onRunStartupScript,
                     hasStartupScript = hasStartupScript
@@ -960,6 +977,7 @@ fun ExpandedPanelContent(
     onTextChanged: (String) -> Unit,
     onToggleExpand: () -> Unit,
     onSend: () -> Unit,
+    onSendEnter: () -> Unit,
     onQuickPrompt: (String) -> Unit,
     onRunStartupScript: () -> Unit,
     hasStartupScript: Boolean
@@ -1034,6 +1052,11 @@ fun ExpandedPanelContent(
                     onClick = onRunStartupScript
                 )
             }
+            PromptChip(
+                label = "回车 ↵",
+                isHighlight = true,
+                onClick = onSendEnter
+            )
             PromptChip(label = "agent --status", onClick = { onQuickPrompt("agent --status") })
             PromptChip(label = "ls -la", onClick = { onQuickPrompt("ls -la") })
             PromptChip(label = "git status", onClick = { onQuickPrompt("git status") })

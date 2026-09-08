@@ -203,7 +203,7 @@ class TerminalSession(
         scope.launch(Dispatchers.IO) {
             try {
                 outputStream?.let { stream ->
-                    stream.write("$command\n".toByteArray(StandardCharsets.UTF_8))
+                    stream.write("$command\r".toByteArray(StandardCharsets.UTF_8))
                     stream.flush()
                 }
             } catch (e: Exception) {
@@ -217,10 +217,11 @@ class TerminalSession(
             // Handle Ctrl+C in mock
             if (bytes.contentEquals(byteArrayOf(3))) {
                 appendOutput("^C\n\u001B[1;32magent@better-shell\u001B[0m:\u001B[1;34m~\u001B[0m$ ")
+            } else if (bytes.contentEquals(byteArrayOf(13))) {
+                appendOutput("\n\u001B[1;32magent@better-shell\u001B[0m:\u001B[1;34m~\u001B[0m$ ")
             }
             return
         }
-
         scope.launch(Dispatchers.IO) {
             try {
                 outputStream?.let { stream ->
