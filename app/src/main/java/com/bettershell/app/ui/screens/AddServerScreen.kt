@@ -159,46 +159,6 @@ fun AddServerScreen(
                             colors = textFieldColors,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        // 自选图标选择条目
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(CircleShape)
-                                .clickable { showIconPicker = true },
-                            shape = CircleShape,
-                            color = inputBg,
-                            border = BorderStroke(1.dp, inputBorder)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = com.bettershell.app.ui.components.ServerIconCatalog.getIcon(selectedIconKey),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = "服务器图标",
-                                        fontSize = 15.sp,
-                                        color = if (isDark) Color(0xFFF3F4F6) else Color(0xFF111827)
-                                    )
-                                }
-                                Text(
-                                    text = "更换图标 >",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
                         OutlinedTextField(
                             value = description,
                             onValueChange = { description = it },
@@ -246,6 +206,47 @@ fun AddServerScreen(
                             colors = textFieldColors,
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        // 底部自选图标条目 (单独一行显示，点击展开)
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(CircleShape)
+                                .clickable { showIconPicker = true },
+                            shape = CircleShape,
+                            color = inputBg,
+                            border = BorderStroke(1.dp, inputBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = com.bettershell.app.ui.components.ServerIconCatalog.getIcon(selectedIconKey),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "服务器图标",
+                                        fontSize = 15.sp,
+                                        color = if (isDark) Color(0xFFF3F4F6) else Color(0xFF111827)
+                                    )
+                                }
+                                Text(
+                                    text = "更换图标 >",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
             }
