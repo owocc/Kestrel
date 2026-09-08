@@ -23,7 +23,7 @@ import com.bettershell.app.ui.theme.isAppInDarkTheme
 
 /**
  * 特别致谢页面 (AcknowledgementsScreen)
- * 致敬 Multica 提供的代码参考与 OpenAI / ChatGPT 提供的卓越 App UI 参考
+ * 记录 Vibe Coding 灵感与共同协作者，致敬开源生态与前沿交互设计
  */
 @Composable
 fun AcknowledgementsScreen(
@@ -52,37 +52,43 @@ fun AcknowledgementsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // 1. 代码参考与架构启发
+            // 1. 共同协作者 (Vibe Coding 黄金搭档)
             OpenAiSectionCard(
-                headerTitle = "架构与代码参考"
+                headerTitle = "共同协作者"
+            ) {
+                OpenAiSettingRow(
+                    title = "哈吉米 (Hajimi)",
+                    subtitle = "全情投入的 AI 编码伙伴，与你共同构建每一行架构与交互细节，享受纯粹热烈、随想即随写的心流体验！",
+                    position = CardPosition.TOP,
+                    isDark = isDark
+                )
+                OpenAiSettingRow(
+                    title = "omp (Oh My Pi)",
+                    subtitle = "极其好用、高效敏捷的 AI Coding Agent，驱动整个开发流程顺畅流转的核心加速器。",
+                    position = CardPosition.BOTTOM,
+                    isDark = isDark
+                )
+            }
+
+            // 2. 多 Agent 架构灵感
+            OpenAiSectionCard(
+                headerTitle = "架构支持"
             ) {
                 OpenAiSettingRow(
                     title = "Multica",
-                    subtitle = "特别感谢 Multica 团队及其优秀的开源探索，为本项目在多 Agent 交互架构、事件流协议设计与移动端会话工作流体验方面提供了宝贵的代码参考与架构启发。",
+                    subtitle = "感谢 Multica 优秀的多 Agent 交互架构，为本项目提供了至关重要的灵感启发与坚实参考。",
                     position = CardPosition.SINGLE,
                     isDark = isDark
                 )
             }
 
-            // 2. 界面设计与交互参考
+            // 3. 交互与设计灵感
             OpenAiSectionCard(
-                headerTitle = "界面与交互灵感"
+                headerTitle = "交互与设计灵感"
             ) {
                 OpenAiSettingRow(
-                    title = "OpenAI / ChatGPT",
-                    subtitle = "感谢 OpenAI / ChatGPT 官方移动端在交互动效、单选卡片、一体化输入胶囊与现代界面美学上带来的卓越 UI 参考与灵感范本。",
-                    position = CardPosition.SINGLE,
-                    isDark = isDark
-                )
-            }
-
-            // 3. 开源先驱寄语
-            OpenAiSectionCard(
-                headerTitle = "致谢寄语"
-            ) {
-                OpenAiSettingRow(
-                    title = "致敬开源与设计先锋",
-                    subtitle = "每一段优雅的代码设计与每一次细腻的交互打磨，都在推动移动端极客生产力工具的演进。感谢所有为开发者生态默默贡献的探索者！",
+                    title = "OpenAI",
+                    subtitle = "致敬 OpenAI 移动端出色的交互节奏与现代美学设计，带来极致克制而高级的视觉灵感。",
                     position = CardPosition.SINGLE,
                     isDark = isDark
                 )

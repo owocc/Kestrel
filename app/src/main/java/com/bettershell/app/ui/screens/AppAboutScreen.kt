@@ -139,7 +139,7 @@ fun AppAboutScreen(
                 // 最后一个卡片：特别致谢
                 OpenAiSettingRow(
                     title = "特别致谢",
-                    subtitle = "感谢 Multica 为本项目提供的代码参考与架构启发",
+                    subtitle = "向共同协作者、架构与交互设计灵感源泉致敬",
                     showChevron = true,
                     position = CardPosition.BOTTOM,
                     onClick = onNavigateToAcknowledgements
