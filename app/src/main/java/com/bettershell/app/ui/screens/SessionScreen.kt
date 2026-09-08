@@ -128,6 +128,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -520,6 +522,9 @@ fun SessionScreen(
                 // Shell 终端专属独立输入体系 (快捷键栏 + 药丸命令输入框 + 多行扩展支持)
                 androidx.compose.animation.AnimatedVisibility(
                     visible = isExpandedInput,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding(), // 紧随软键盘抬升，自适应键盘高度！
                     enter = androidx.compose.animation.slideInVertically(
                         initialOffsetY = { it },
                         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
@@ -1037,10 +1042,20 @@ fun ExpandedInputSheet(
     onCollapse: () -> Unit,
     onSend: () -> Unit
 ) {
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+
+    // 展开后自动聚焦文本框并拉起软键盘
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(120)
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(380.dp),
+            .height(260.dp), // 适配键盘展开高度，留足屏幕可视空间
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
@@ -1117,7 +1132,9 @@ fun ExpandedInputSheet(
                 BasicTextField(
                     value = text,
                     onValueChange = onTextChanged,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .focusRequester(focusRequester),
                     textStyle = TextStyle(
                         fontFamily = fontFamily,
                         fontSize = 14.sp,
