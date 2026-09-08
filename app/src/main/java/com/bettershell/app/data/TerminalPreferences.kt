@@ -37,6 +37,7 @@ data class TerminalPreferences(
     val lineSpacingMultiplier: Float = 1.3f,
     val softWrap: Boolean = false, // 默认不换行，支持横向滚动保持 CLI 表格完整排版
     val themeMode: AppThemeMode = AppThemeMode.DARK,
+    val serverLayoutMode: String = "LIST", // 首页服务器列表排列模式: LIST | GRID
     val cachedKeyboardHeightPx: Int = 0
 )
 class TerminalPreferencesRepository(context: Context) {
@@ -65,12 +66,14 @@ class TerminalPreferencesRepository(context: Context) {
         } catch (e: Exception) {
             AppThemeMode.DARK
         }
+        val layoutMode = prefs.getString("server_layout_mode", "LIST") ?: "LIST"
         return TerminalPreferences(
             font = font,
             fontSizeSp = fontSize,
             lineSpacingMultiplier = lineSpacing,
             softWrap = softWrap,
             themeMode = themeMode,
+            serverLayoutMode = layoutMode,
             cachedKeyboardHeightPx = prefs.getInt("cached_keyboard_height_px", 0)
         )
     }
@@ -101,6 +104,10 @@ class TerminalPreferencesRepository(context: Context) {
             prefs.edit().putInt("cached_keyboard_height_px", heightPx).apply()
             _preferences.value = _preferences.value.copy(cachedKeyboardHeightPx = heightPx)
         }
+    }
+    fun updateServerLayoutMode(mode: String) {
+        prefs.edit().putString("server_layout_mode", mode).apply()
+        _preferences.value = _preferences.value.copy(serverLayoutMode = mode)
     }
     fun updatePreferences(newPrefs: TerminalPreferences) {
         prefs.edit()

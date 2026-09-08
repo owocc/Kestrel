@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -95,7 +96,8 @@ fun ServerListScreen(
 ) {
     val isDark = isAppInDarkTheme
     val servers by repository.servers.collectAsState()
-    var layoutMode by remember { mutableStateOf(ServerLayoutMode.LIST) }
+    val prefs by prefsRepository.preferences.collectAsState()
+    val layoutMode = if (prefs.serverLayoutMode == "GRID") ServerLayoutMode.GRID else ServerLayoutMode.LIST
     var searchQuery by remember { mutableStateOf("") }
 
     val scope = rememberCoroutineScope()
@@ -123,7 +125,8 @@ fun ServerListScreen(
                     // 网格与列表模式切换：纯图标，无背景，位于设置左侧
                     IconButton(
                         onClick = {
-                            layoutMode = if (layoutMode == ServerLayoutMode.LIST) ServerLayoutMode.GRID else ServerLayoutMode.LIST
+                            val newMode = if (layoutMode == ServerLayoutMode.LIST) "GRID" else "LIST"
+                            prefsRepository.updateServerLayoutMode(newMode)
                         }
                     ) {
                         Icon(
@@ -349,6 +352,7 @@ fun ServerCard(
     val titleColor = if (isDark) Color(0xFFF3F4F6) else Color(0xFF111827)
     val subtitleColor = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
     val shape = getCardShape(position)
+    val borderColor = if (isDark) Color(0xFF2E2E2E) else Color(0xFFE5E7EB)
 
     Surface(
         modifier = Modifier
@@ -357,6 +361,7 @@ fun ServerCard(
             .clickable(onClick = onConnect),
         shape = shape,
         color = cardBg,
+        border = BorderStroke(1.dp, borderColor),
         shadowElevation = 0.dp
     ) {
         Box(
@@ -483,20 +488,23 @@ fun ServerGridCard(
     val cardBg = if (isDark) Color(0xFF1E1E1E) else Color(0xFFF3F4F6)
     val titleColor = if (isDark) Color(0xFFF3F4F6) else Color(0xFF111827)
     val subtitleColor = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(18.dp)
+    val borderColor = if (isDark) Color(0xFF2E2E2E) else Color(0xFFE5E7EB)
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .aspectRatio(1f) // 固定为完美正方形！
             .clip(shape)
             .clickable(onClick = onConnect),
         shape = shape,
         color = cardBg,
+        border = BorderStroke(1.dp, borderColor), // 精致描边
         shadowElevation = 0.dp
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .clip(shape)
         ) {
             // 背景层：最左边、固定在底部、旋转 25度、向右渐变透明
@@ -510,8 +518,8 @@ fun ServerGridCard(
                         drawContent()
                         val maskBrush = Brush.horizontalGradient(
                             0.0f to Color.White,
-                            0.35f to Color.White.copy(alpha = 0.5f),
-                            0.75f to Color.Transparent,
+                            0.40f to Color.White.copy(alpha = 0.5f),
+                            0.80f to Color.Transparent,
                             1.0f to Color.Transparent,
                             startX = 0f,
                             endX = size.width
@@ -527,23 +535,44 @@ fun ServerGridCard(
                     contentDescription = null,
                     tint = titleColor.copy(alpha = if (isDark) 0.16f else 0.12f),
                     modifier = Modifier
-                        .size(72.dp)
+                        .size(88.dp)
                         .align(Alignment.BottomStart)
-                        .offset(x = (-10).dp, y = 14.dp)
+                        .offset(x = (-12).dp, y = 18.dp)
                         .rotate(25f)
                 )
             }
 
-            Column(modifier = Modifier.padding(14.dp)) {
+            // 内容层：从左上角开始紧凑自然排布！
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.Top
+            ) {
+                // 顶部行：左上角标题 (占据主位)，右上角极简三点菜单
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
+                    Text(
+                        text = server.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = titleColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 4.dp)
+                    )
+
                     Box {
                         IconButton(
                             onClick = { menuExpanded = true },
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier
+                                .size(24.dp)
+                                .offset(x = 4.dp, y = (-2).dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.MoreVert,
@@ -573,26 +602,17 @@ fun ServerGridCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                Text(
-                    text = server.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = titleColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
+                // 紧接着标题下方的描述文本
                 val descText = server.description.ifBlank { "远程连接主机" }
                 Text(
                     text = descText,
                     style = MaterialTheme.typography.bodySmall,
                     color = subtitleColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
