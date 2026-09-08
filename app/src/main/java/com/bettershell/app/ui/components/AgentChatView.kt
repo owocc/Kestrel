@@ -13,6 +13,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -95,18 +96,18 @@ fun AgentChatView(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    SelectionContainer(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(messages, key = { it.id }) { message ->
                 MulticaMessageItem(message = message)
             }
 
-            // 仿 Multica 正在运行时的底部呼吸态 Status Pill
+            // 正在运行时的底部呼吸态 Status Pill
             if (isAgentBusy && currentStatus != null) {
                 item {
                     MulticaStatusPill(status = currentStatus)
@@ -207,9 +208,9 @@ fun MulticaMessageItem(message: ChatMessage) {
         ChatSender.AGENT -> {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 如果有执行步骤（Multica ChatTimeline 折叠栏）
+                // 如果有执行步骤（ChatTimeline 折叠栏）
                 if (message.steps.isNotEmpty()) {
                     MulticaTimelineSection(
                         steps = message.steps,
@@ -217,46 +218,14 @@ fun MulticaMessageItem(message: ChatMessage) {
                     )
                 }
 
-                // 核心回复内容气泡
+                // AI 输出直接铺开展示，去除任何对话头像和气泡外壳，干净通透
                 if (message.content.isNotBlank()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Start,
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(AccentCyan.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.AutoAwesome,
-                                contentDescription = "omp",
-                                tint = AccentCyan,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Surface(
-                            shape = RoundedCornerShape(
-                                topStart = 4.dp,
-                                topEnd = 18.dp,
-                                bottomStart = 18.dp,
-                                bottomEnd = 18.dp
-                            ),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.weight(1f, fill = false)
-                        ) {
-                            SimpleMarkdownMessage(
-                                content = message.content,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp)
-                            )
-                        }
-                    }
+                    SimpleMarkdownMessage(
+                        content = message.content,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    )
                 }
             }
         }
