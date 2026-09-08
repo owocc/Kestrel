@@ -480,7 +480,7 @@ fun SessionScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .imePadding()
-                        .padding(bottom = bottomNavPadding)
+                        .padding(bottom = bottomNavPadding + 8.dp)
                 ) {
                     ChatIntegratedInputBar(
                         text = chatInputText,
