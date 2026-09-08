@@ -3,7 +3,6 @@ package com.bettershell.app.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +21,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +33,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,13 +46,19 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bettershell.app.agent.DiscoveredAgent
 import com.bettershell.app.agent.SupportedAgentsCatalog
 
 /**
- * 完整对标用户截图 1 & 截图 2 的 ChatGPT 融合胶囊风格输入框
+ * 完整对标用户截图 1、截图 2 & 截图 3 的 ChatGPT 融合胶囊风格输入框
+ * - 上半部分：自适应输入框
+ * - 下半部分：
+ *   - 左侧 '+' 按钮：点击弹出对标截图 3 的大圆角 OpenAiDropdownMenu (切换 Agent / 更深入思考 / 快捷动作)
+ *   - 居中偏左：当前 Agent 胶囊
+ *   - 右侧：集成式圆形向上发送箭头
  */
 @Composable
 fun ChatIntegratedInputBar(
@@ -55,10 +68,12 @@ fun ChatIntegratedInputBar(
     isAgentBusy: Boolean,
     isDark: Boolean,
     onOpenAgentPicker: () -> Unit,
+    onToggleDeepThinking: () -> Unit = {},
     onSend: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val hasText = text.isNotBlank()
+    var showPlusMenu by remember { mutableStateOf(false) }
 
     val containerBg = if (isDark) Color(0xFF1E1E1E) else Color(0xFFF3F4F6)
     val containerBorder = if (isDark) Color(0xFF333333) else Color(0xFFE5E7EB)
@@ -86,7 +101,7 @@ fun ChatIntegratedInputBar(
             ) {
                 if (text.isEmpty()) {
                     Text(
-                        text = if (activeAgent != null) "询问 ${activeAgent.type.displayName}..." else "未选择 Agent (点击 '+' 扫描选择)...",
+                        text = if (activeAgent != null) "询问 ${activeAgent.type.displayName}..." else "未选择 Agent (点击 '+' 切换选择)...",
                         style = TextStyle(
                             fontFamily = FontFamily.Default,
                             fontSize = 15.sp,
@@ -115,7 +130,7 @@ fun ChatIntegratedInputBar(
 
             Spacer(modifier = Modifier.size(8.dp))
 
-            // 2. 下半部分：操作工具条 (左侧 '+' 选 Agent，右侧融合圆形向上发送箭头)
+            // 2. 下半部分：操作工具条
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -125,19 +140,48 @@ fun ChatIntegratedInputBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(if (isDark) Color(0xFF2C2C2C) else Color(0xFFE5E7EB))
-                            .clickable(onClick = onOpenAgentPicker),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = "选择 Agent 与模型",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
+                    // '+' 按钮与对标截图 3 的大圆角弹出菜单
+                    Box {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(if (isDark) Color(0xFF2C2C2C) else Color(0xFFE5E7EB))
+                                .clickable { showPlusMenu = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = "操作与切换",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // 截图 3 规范的超大圆角 Popover 菜单
+                        OpenAiDropdownMenu(
+                            expanded = showPlusMenu,
+                            onDismissRequest = { showPlusMenu = false },
+                            offset = DpOffset(0.dp, (-14).dp),
+                            width = 220.dp,
+                            isDark = isDark,
+                            items = listOf(
+                                OpenAiMenuItemData(
+                                    title = "选择 Agent 与模型",
+                                    icon = Icons.Rounded.SmartToy,
+                                    onClick = onOpenAgentPicker
+                                ),
+                                OpenAiMenuItemData(
+                                    title = "更深入思考",
+                                    icon = Icons.Rounded.Psychology,
+                                    onClick = onToggleDeepThinking
+                                ),
+                                OpenAiMenuItemData(
+                                    title = "插入文件路径",
+                                    icon = Icons.Rounded.AttachFile,
+                                    onClick = { onTextChanged(text + " @") }
+                                )
+                            )
                         )
                     }
 
@@ -176,6 +220,7 @@ fun ChatIntegratedInputBar(
                     }
                 }
 
+                // 右侧融合式圆形操作按钮 (绿色向上箭头)
                 val sendBtnBg by animateColorAsState(
                     targetValue = when {
                         isAgentBusy -> Color(0xFFEF4444)

@@ -155,6 +155,9 @@ import com.bettershell.app.agent.DiscoveredAgent
 import com.bettershell.app.agent.UniversalAgentRunner
 import com.bettershell.app.ui.components.AgentPickerBottomSheet
 import com.bettershell.app.ui.components.ChatIntegratedInputBar
+import com.bettershell.app.ui.components.OpenAiDropdownMenu
+import com.bettershell.app.ui.components.OpenAiMenuItemData
+import com.bettershell.app.ui.components.UnifiedServerSettingsBottomSheet
 import com.bettershell.app.terminal.OmpAgentClient
 import com.bettershell.app.ui.components.AgentLogsBottomSheet
 import com.bettershell.app.ui.components.AgentChatView
@@ -169,6 +172,7 @@ fun SessionScreen(
     sessionManager: SessionManager,
     prefsRepository: TerminalPreferencesRepository,
     onOpenRawLogs: (logs: String) -> Unit = {},
+    onOpenServerSettings: () -> Unit = {},
     onBack: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -290,12 +294,12 @@ fun SessionScreen(
     }
 
     // Root Container: Layered architecture (Shell layer + Floating Input Layer)
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .statusBarsPadding()
+        ) {
         // Layer 1: Shell & Terminal Layer (Underneath)
         Column(
             modifier = Modifier.fillMaxSize()
@@ -332,7 +336,7 @@ fun SessionScreen(
                         shellTerminalSession.clearScreen()
                     }
                 },
-                onOpenSettings = { showServerSettingsSheet = true }
+                onOpenSettings = { onOpenServerSettings() }
             )
             // Content Area: Switch between Agent Chat View and Interactive Terminal View
             if (currentMode == SessionMode.CHAT) {
@@ -672,19 +676,19 @@ fun SessionScreen(
         )
     }
 
-    // Server Settings Sheet (Theme, Font, Display & Startup Script)
+    // 统一复用的服务器深度管理抽屉 (修改密码、Host、AI与单CLI配置等)
     if (showServerSettingsSheet) {
-        ServerSettingsSheet(
+        UnifiedServerSettingsBottomSheet(
             server = currentServer,
-            prefsRepository = prefsRepository,
-            onDismiss = { showServerSettingsSheet = false },
-            onSave = { updated ->
+            agentDiscoveryRepo = agentDiscoveryRepo,
+            onSaveServer = { updated ->
                 currentServer = updated
                 coroutineScope.launch {
                     repository.updateServer(updated)
                 }
                 showServerSettingsSheet = false
-            }
+            },
+            onDismiss = { showServerSettingsSheet = false }
         )
     }
 }
@@ -751,115 +755,61 @@ fun SessionTopBar(
                     size = 22.dp
                 )
             }
-
-            DropdownMenu(
-                expanded = showMoreMenu,
-                onDismissRequest = { showMoreMenu = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("会话列表 (${server.name})") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Rounded.Terminal,
-                            contentDescription = null
-                        )
-                    },
-                    onClick = {
-                        showMoreMenu = false
-                        onTitleClick()
-                    }
+            val menuItems = mutableListOf<OpenAiMenuItemData>()
+            menuItems.add(
+                OpenAiMenuItemData(
+                    title = "会话列表 (${server.name})",
+                    icon = Icons.Rounded.Terminal,
+                    onClick = onTitleClick
                 )
-
-                DropdownMenuItem(
-                    text = { Text("查看 Chat 原始日志") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Rounded.Code,
-                            contentDescription = null,
-                            tint = AccentCyan
-                        )
-                    },
-                    onClick = {
-                        showMoreMenu = false
-                        onViewLogs()
-                    }
+            )
+            menuItems.add(
+                OpenAiMenuItemData(
+                    title = "查看 Chat 原始日志",
+                    icon = Icons.Rounded.Code,
+                    iconTint = AccentCyan,
+                    onClick = onViewLogs
                 )
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                DropdownMenuItem(
-                    text = { Text(if (isDark) "浅色主题" else "深色主题") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                            contentDescription = null
-                        )
-                    },
-                    onClick = {
-                        showMoreMenu = false
-                        onToggleTheme()
-                    }
+            )
+            menuItems.add(
+                OpenAiMenuItemData(
+                    title = if (softWrap) "禁用自动换行" else "启用自动换行",
+                    icon = Icons.AutoMirrored.Rounded.WrapText,
+                    onClick = onToggleSoftWrap
                 )
-
-                DropdownMenuItem(
-                    text = { Text(if (softWrap) "禁用自动换行" else "启用自动换行") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.WrapText,
-                            contentDescription = null
-                        )
-                    },
-                    onClick = {
-                        showMoreMenu = false
-                        onToggleSoftWrap()
-                    }
-                )
-
-                if (connectionState is ConnectionState.Disconnected || connectionState is ConnectionState.Error) {
-                    DropdownMenuItem(
-                        text = { Text("重新连接", color = AccentGreen) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Rounded.Refresh,
-                                contentDescription = null,
-                                tint = AccentGreen
-                            )
-                        },
-                        onClick = {
-                            showMoreMenu = false
-                            onReconnect()
-                        }
+            )
+            if (connectionState is ConnectionState.Disconnected || connectionState is ConnectionState.Error) {
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "重新连接",
+                        icon = Icons.Rounded.Refresh,
+                        iconTint = AccentGreen,
+                        onClick = onReconnect
                     )
-                }
-
-                DropdownMenuItem(
-                    text = { Text("清空终端") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Rounded.DeleteSweep,
-                            contentDescription = null
-                        )
-                    },
-                    onClick = {
-                        showMoreMenu = false
-                        onClear()
-                    }
-                )
-
-                DropdownMenuItem(
-                    text = { Text("服务器设置") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Rounded.Settings,
-                            contentDescription = null
-                        )
-                    },
-                    onClick = {
-                        showMoreMenu = false
-                        onOpenSettings()
-                    }
                 )
             }
+            menuItems.add(
+                OpenAiMenuItemData(
+                    title = "清空终端",
+                    icon = Icons.Rounded.DeleteSweep,
+                    onClick = onClear
+                )
+            )
+            menuItems.add(
+                OpenAiMenuItemData(
+                    title = "服务器设置",
+                    icon = Icons.Rounded.Settings,
+                    onClick = onOpenSettings
+                )
+            )
+
+            OpenAiDropdownMenu(
+                expanded = showMoreMenu,
+                onDismissRequest = { showMoreMenu = false },
+                items = menuItems,
+                isDark = isDark,
+                width = 230.dp
+            )
         }
     }
 }

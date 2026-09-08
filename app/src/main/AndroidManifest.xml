@@ -9,6 +9,7 @@
         android:icon="@android:drawable/ic_dialog_info"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.BetterShell">
         <activity
             android:name=".MainActivity"

@@ -1,9 +1,9 @@
 package com.bettershell.app.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,24 +15,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Code
-import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Terminal
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -54,107 +55,75 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bettershell.app.data.AppThemeMode
+import com.bettershell.app.agent.AgentDiscoveryRepository
 import com.bettershell.app.data.AuthType
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.data.ServerRepository
 import com.bettershell.app.data.TerminalPreferencesRepository
+import com.bettershell.app.ui.components.OpenAiDropdownMenu
+import com.bettershell.app.ui.components.OpenAiMenuItemData
 import com.bettershell.app.ui.theme.AccentCyan
 import com.bettershell.app.ui.theme.AccentGreen
 import com.bettershell.app.ui.theme.AccentOrange
 import kotlinx.coroutines.launch
-import com.bettershell.app.agent.AgentDiscoveryRepository
-import com.bettershell.app.agent.SshAgentScanner
-import com.bettershell.app.ui.components.ServerAgentScanBottomSheet
+
+enum class ServerLayoutMode {
+    LIST,
+    GRID
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ServerListScreen(
     repository: ServerRepository,
     prefsRepository: TerminalPreferencesRepository,
+    onOpenAppSettings: () -> Unit,
+    onOpenServerSettings: (ServerConfig) -> Unit,
     onSelectServer: (ServerConfig) -> Unit
 ) {
     val servers by repository.servers.collectAsState()
-    val terminalPrefs by prefsRepository.preferences.collectAsState()
-    var showAddEditDialog by remember { mutableStateOf(false) }
-    var editingServer by remember { mutableStateOf<ServerConfig?>(null) }
-    var scanningServer by remember { mutableStateOf<ServerConfig?>(null) }
-    var isScanningAgents by remember { mutableStateOf(false) }
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val agentDiscoveryRepo = remember { AgentDiscoveryRepository(context) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var layoutMode by remember { mutableStateOf(ServerLayoutMode.LIST) }
+    var searchQuery by remember { mutableStateOf("") }
+
     val scope = rememberCoroutineScope()
 
-    val isDark = when (terminalPrefs.themeMode) {
-        AppThemeMode.DARK -> true
-        AppThemeMode.LIGHT -> false
-        AppThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+    // 搜索过滤
+    val filteredServers = remember(servers, searchQuery) {
+        if (searchQuery.isBlank()) servers
+        else servers.filter {
+            it.name.contains(searchQuery, ignoreCase = true) ||
+            it.host.contains(searchQuery, ignoreCase = true) ||
+            it.username.contains(searchQuery, ignoreCase = true)
+        }
     }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Terminal,
-                                contentDescription = "Terminal Logo",
-                                tint = AccentGreen,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = "BetterShell",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "AI Agent Shell & Mobile Terminal",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    Text(
+                        text = "BetterShell",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 },
                 actions = {
-                    IconButton(
-                        onClick = {
-                            val nextMode = if (isDark) AppThemeMode.LIGHT else AppThemeMode.DARK
-                            prefsRepository.updateThemeMode(nextMode)
-                        }
-                    ) {
+                    // 右侧唯一入口：软件设置
+                    IconButton(onClick = onOpenAppSettings) {
                         Icon(
-                            imageVector = if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                            contentDescription = "切换主题模式",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            editingServer = null
-                            showAddEditDialog = true
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = "Add Server",
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = "软件设置",
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -166,153 +135,208 @@ fun ServerListScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = {
-                    editingServer = null
-                    showAddEditDialog = true
-                },
-                icon = { Icon(Icons.Rounded.Add, "Add Server") },
-                text = { Text("添加服务器", fontWeight = FontWeight.SemiBold) },
+                onClick = { showAddDialog = true },
+                icon = { Icon(Icons.Rounded.Add, "新建服务器") },
+                text = { Text("新建服务器", fontWeight = FontWeight.SemiBold) },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 elevation = FloatingActionButtonDefaults.elevation(4.dp)
             )
         }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (servers.isEmpty()) {
-                Column(
+            // 搜索栏与 List/Grid 布局切换
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                        .weight(1f)
+                        .height(42.dp)
                 ) {
-                    Box(
+                    Row(
                         modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.Terminal,
+                            imageVector = Icons.Rounded.Search,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(18.dp)
+                        )
+
+                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                            if (searchQuery.isEmpty()) {
+                                Text(
+                                    text = "搜索服务器名称 / IP / 用户名...",
+                                    style = TextStyle(fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f))
+                                )
+                            }
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                singleLine = true,
+                                textStyle = TextStyle(fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurface),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        if (searchQuery.isNotEmpty()) {
+                            Icon(
+                                imageVector = Icons.Rounded.Clear,
+                                contentDescription = "Clear",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable { searchQuery = "" }
+                            )
+                        }
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            layoutMode = if (layoutMode == ServerLayoutMode.LIST) ServerLayoutMode.GRID else ServerLayoutMode.LIST
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (layoutMode == ServerLayoutMode.LIST) Icons.Rounded.GridView else Icons.AutoMirrored.Rounded.ViewList,
+                            contentDescription = "切换视图模式",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "暂无服务器配置",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "点击下方按钮添加远程 SSH 服务器或本地 Agent 节点",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                }
+            }
+
+            if (filteredServers.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Terminal,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = if (searchQuery.isNotEmpty()) "未找到匹配的服务器" else "暂无服务器配置",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = if (searchQuery.isNotEmpty()) "请尝试使用其他关键词搜索" else "点击下方按钮新建服务器",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    item {
-                        Text(
-                            text = "已配置的服务器 (${servers.size})",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp)
-                        )
-                    }
-
-                    items(servers, key = { it.id }) { server ->
-                        ServerCard(
-                            server = server,
-                            onConnect = { onSelectServer(server) },
-                            onEdit = {
-                                editingServer = server
-                                showAddEditDialog = true
-                            },
-                            onScanAgents = {
-                                scanningServer = server
-                            },
-                            onDelete = {
-                                scope.launch {
-                                    repository.deleteServer(server.id)
+                if (layoutMode == ServerLayoutMode.LIST) {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filteredServers, key = { it.id }) { server ->
+                            ServerCard(
+                                server = server,
+                                onConnect = { onSelectServer(server) },
+                                onManage = { onOpenServerSettings(server) },
+                                onDelete = {
+                                    scope.launch {
+                                        repository.deleteServer(server.id)
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filteredServers, key = { it.id }) { server ->
+                            ServerGridCard(
+                                server = server,
+                                onConnect = { onSelectServer(server) },
+                                onManage = { onOpenServerSettings(server) },
+                                onDelete = {
+                                    scope.launch {
+                                        repository.deleteServer(server.id)
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
-    if (showAddEditDialog) {
+    if (showAddDialog) {
         AddEditServerDialog(
-            initialServer = editingServer,
-            onDismiss = {
-                showAddEditDialog = false
-                editingServer = null
-            },
-            onSave = { updated ->
+            initialServer = null,
+            onDismiss = { showAddDialog = false },
+            onSave = { newServer ->
                 scope.launch {
-                    if (editingServer != null) {
-                        repository.updateServer(updated)
-                    } else {
-                        repository.addServer(updated)
-                    }
+                    repository.addServer(newServer)
                 }
-                showAddEditDialog = false
-                editingServer = null
-            }
-        )
-    }
-    // 服务器 Agent 扫描与环境管理抽屉
-    if (scanningServer != null) {
-        val targetServer = scanningServer!!
-        var serverAgents by remember(targetServer.id) {
-            mutableStateOf(agentDiscoveryRepo.getCachedAgents(targetServer.id))
-        }
-
-        ServerAgentScanBottomSheet(
-            server = targetServer,
-            discoveredAgents = serverAgents,
-            isScanning = isScanningAgents,
-            onStartScan = {
-                isScanningAgents = true
-                scope.launch {
-                    val probeOutput = SshAgentScanner.scanServer(targetServer)
-                    val parsed = agentDiscoveryRepo.parseProbeResult(probeOutput) ?: emptyList()
-                    serverAgents = parsed
-                    agentDiscoveryRepo.saveAgents(targetServer.id, parsed)
-                    isScanningAgents = false
-                }
-            },
-            onDismiss = {
-                scanningServer = null
-                isScanningAgents = false
+                showAddDialog = false
             }
         )
     }
 }
 
+/**
+ * 列表视图卡片：整卡点击直接连接，彻底去除突兀多余的播放按钮，只保留右侧三点菜单
+ */
 @Composable
 fun ServerCard(
     server: ServerConfig,
     onConnect: () -> Unit,
-    onEdit: () -> Unit,
-    onScanAgents: () -> Unit,
+    onManage: () -> Unit,
     onDelete: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -320,188 +344,213 @@ fun ServerCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+            .clip(RoundedCornerShape(18.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
+            .clickable(onClick = onConnect), // 整卡点击进入
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 0.dp
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.weight(1f)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (server.isMock) AccentGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant)
-                            .border(
-                                1.dp,
-                                if (server.isMock) AccentGreen.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline,
-                                RoundedCornerShape(12.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (server.isMock) Icons.Rounded.SmartToy else Icons.Rounded.Terminal,
-                            contentDescription = null,
-                            tint = if (server.isMock) AccentGreen else AccentCyan,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    Column {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = server.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-
-                            val badgeLabel = when (server.authType) {
-                                AuthType.DEMO_MOCK -> "Demo"
-                                AuthType.PASSWORD -> "密码"
-                                AuthType.PRIVATE_KEY -> "密钥"
-                            }
-                            val badgeColor = when (server.authType) {
-                                AuthType.DEMO_MOCK -> AccentGreen
-                                AuthType.PASSWORD -> AccentOrange
-                                AuthType.PRIVATE_KEY -> AccentCyan
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(badgeColor.copy(alpha = 0.15f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = badgeLabel,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = badgeColor
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(3.dp))
-
-                        Text(
-                            text = "${server.username}@${server.host}:${server.port}",
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                            .clickable(onClick = onConnect)
-                            .padding(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.PlayArrow,
-                            contentDescription = "Connect",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Box {
-                        IconButton(onClick = { menuExpanded = true }) {
-                            Icon(
-                                imageVector = Icons.Rounded.MoreVert,
-                                contentDescription = "More Options",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false },
-                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("扫描 Agent", color = MaterialTheme.colorScheme.onSurface) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onScanAgents()
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Rounded.SmartToy, null, tint = AccentCyan)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("编辑配置", color = MaterialTheme.colorScheme.onSurface) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onEdit()
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Rounded.Edit, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("删除服务器", color = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onDelete()
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (server.startupScript.isNotBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (server.isMock) AccentGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Code,
+                        imageVector = if (server.isMock) Icons.Rounded.SmartToy else Icons.Rounded.Terminal,
                         contentDescription = null,
-                        tint = AccentGreen,
-                        modifier = Modifier.size(14.dp)
+                        tint = if (server.isMock) AccentGreen else AccentCyan,
+                        modifier = Modifier.size(22.dp)
                     )
+                }
+
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = server.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        val badgeLabel = when (server.authType) {
+                            AuthType.DEMO_MOCK -> "Demo"
+                            AuthType.PASSWORD -> "密码"
+                            AuthType.PRIVATE_KEY -> "密钥"
+                        }
+                        val badgeColor = when (server.authType) {
+                            AuthType.DEMO_MOCK -> AccentGreen
+                            AuthType.PASSWORD -> AccentOrange
+                            AuthType.PRIVATE_KEY -> AccentCyan
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(badgeColor.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = badgeLabel,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = badgeColor
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(3.dp))
+
                     Text(
-                        text = "启动脚本: ${server.startupScript.lines().firstOrNull { it.isNotBlank() } ?: ""}",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
+                        text = "${server.username}@${server.host}:${server.port}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
+
+            // 右侧只留一个极简三点菜单 (彻底去除多余的黑色播放按钮)
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "More Options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                OpenAiDropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    items = listOf(
+                        OpenAiMenuItemData(
+                            title = "服务器设置",
+                            icon = Icons.Rounded.Settings,
+                            onClick = onManage
+                        ),
+                        OpenAiMenuItemData(
+                            title = "删除服务器",
+                            icon = Icons.Rounded.Delete,
+                            isDestructive = true,
+                            onClick = onDelete
+                        )
+                    )
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 网格视图卡片：整卡点击进入，彻底去除多余播放按钮
+ */
+@Composable
+fun ServerGridCard(
+    server: ServerConfig,
+    onConnect: () -> Unit,
+    onManage: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
+            .clickable(onClick = onConnect), // 整卡点击连接
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 0.dp
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (server.isMock) AccentGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (server.isMock) Icons.Rounded.SmartToy else Icons.Rounded.Terminal,
+                        contentDescription = null,
+                        tint = if (server.isMock) AccentGreen else AccentCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Rounded.MoreVert,
+                            contentDescription = "More",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    OpenAiDropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                        items = listOf(
+                            OpenAiMenuItemData(
+                                title = "服务器设置",
+                                icon = Icons.Rounded.Settings,
+                                onClick = onManage
+                            ),
+                            OpenAiMenuItemData(
+                                title = "删除",
+                                icon = Icons.Rounded.Delete,
+                                isDestructive = true,
+                                onClick = onDelete
+                            )
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = server.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "${server.username}@${server.host}",
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
