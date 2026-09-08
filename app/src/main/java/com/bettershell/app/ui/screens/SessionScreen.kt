@@ -89,6 +89,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -1016,7 +1017,6 @@ fun ToolsBottomSheet(
     onClearTerminal: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    var isReorderMode by remember { mutableStateOf(false) }
     var toolsList by remember {
         mutableStateOf(
             listOf(
@@ -1043,16 +1043,33 @@ fun ToolsBottomSheet(
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     val gridState = rememberLazyGridState()
 
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val configuration = LocalConfiguration.current
+    val screenHeightDp = configuration.screenHeightDp.dp
+    val maxSheetHeight = screenHeightDp * 2f / 3f
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 12.dp)
+                    .width(44.dp)
+                    .height(5.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+            )
+        }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(max = maxSheetHeight)
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp)
+                .padding(bottom = 28.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -1062,21 +1079,16 @@ fun ToolsBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (isReorderMode) "长按卡片拖拽调整" else "快捷工具与指令",
+                    text = if (draggingIndex != null) "拖拽卡片以调整顺序" else "快捷工具与指令",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (isReorderMode) AccentOrange else MaterialTheme.colorScheme.onSurface
+                    color = if (draggingIndex != null) AccentOrange else MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
-                    text = if (isReorderMode) "完成" else "自定义排序",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isReorderMode) AccentGreen else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { isReorderMode = !isReorderMode }
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                    text = "长按卡片可排序",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             }
 
@@ -1084,8 +1096,8 @@ fun ToolsBottomSheet(
                 columns = GridCells.Fixed(3),
                 state = gridState,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 380.dp),
+                    .weight(1f, fill = false)
+                    .fillMaxWidth(),
                 contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 horizontalArrangement = Arrangement.SpaceAround
@@ -1100,67 +1112,59 @@ fun ToolsBottomSheet(
                                 if (isDragging) {
                                     translationX = dragOffset.x
                                     translationY = dragOffset.y
-                                    scaleX = 1.12f
-                                    scaleY = 1.12f
+                                    scaleX = 1.15f
+                                    scaleY = 1.15f
                                 }
                             }
-                            .then(
-                                if (isReorderMode) {
-                                    Modifier.pointerInput(index) {
-                                        detectDragGestures(
-                                            onDragStart = {
-                                                draggingIndex = index
-                                                dragOffset = Offset.Zero
-                                            },
-                                            onDrag = { change, dragAmount ->
-                                                change.consume()
-                                                dragOffset += dragAmount
+                            .pointerInput(index) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        draggingIndex = index
+                                        dragOffset = Offset.Zero
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffset += dragAmount
 
-                                                val cellWidthPx = size.width.toFloat()
-                                                val cellHeightPx = size.height.toFloat()
-                                                val deltaCol = (dragOffset.x / cellWidthPx).roundToInt()
-                                                val deltaRow = (dragOffset.y / cellHeightPx).roundToInt()
-                                                val targetIndex = (draggingIndex!! + deltaRow * 3 + deltaCol)
-                                                    .coerceIn(0, toolsList.lastIndex)
+                                        val cellWidthPx = size.width.toFloat()
+                                        val cellHeightPx = size.height.toFloat()
+                                        val deltaCol = (dragOffset.x / cellWidthPx).roundToInt()
+                                        val deltaRow = (dragOffset.y / cellHeightPx).roundToInt()
+                                        val targetIndex = (draggingIndex!! + deltaRow * 3 + deltaCol)
+                                            .coerceIn(0, toolsList.lastIndex)
 
-                                                if (targetIndex != draggingIndex) {
-                                                    val updated = toolsList.toMutableList()
-                                                    val moved = updated.removeAt(draggingIndex!!)
-                                                    updated.add(targetIndex, moved)
-                                                    toolsList = updated
-                                                    draggingIndex = targetIndex
-                                                    dragOffset = Offset.Zero
-                                                }
-                                            },
-                                            onDragEnd = {
-                                                draggingIndex = null
-                                                dragOffset = Offset.Zero
-                                            },
-                                            onDragCancel = {
-                                                draggingIndex = null
-                                                dragOffset = Offset.Zero
-                                            }
-                                        )
+                                        if (targetIndex != draggingIndex) {
+                                            val updated = toolsList.toMutableList()
+                                            val moved = updated.removeAt(draggingIndex!!)
+                                            updated.add(targetIndex, moved)
+                                            toolsList = updated
+                                            draggingIndex = targetIndex
+                                            dragOffset = Offset.Zero
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        draggingIndex = null
+                                        dragOffset = Offset.Zero
+                                    },
+                                    onDragCancel = {
+                                        draggingIndex = null
+                                        dragOffset = Offset.Zero
                                     }
-                                } else {
-                                    Modifier
-                                }
-                            ),
+                                )
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         ToolGridItem(
                             icon = item.icon,
                             label = item.label,
                             highlight = item.isScript && hasStartupScript,
-                            isReordering = isReorderMode,
+                            isReordering = isDragging,
                             onClick = {
-                                if (!isReorderMode) {
-                                    when {
-                                        item.isScript -> onRunStartupScript()
-                                        item.command != null -> onInsertCommand(item.command)
-                                        item.symbol != null -> onInsertSymbol(item.symbol)
-                                        item.isClear -> onClearTerminal()
-                                    }
+                                when {
+                                    item.isScript -> onRunStartupScript()
+                                    item.command != null -> onInsertCommand(item.command)
+                                    item.symbol != null -> onInsertSymbol(item.symbol)
+                                    item.isClear -> onClearTerminal()
                                 }
                             }
                         )
@@ -1170,7 +1174,6 @@ fun ToolsBottomSheet(
         }
     }
 }
-
 @Composable
 fun ToolGridItem(
     icon: ImageVector,
