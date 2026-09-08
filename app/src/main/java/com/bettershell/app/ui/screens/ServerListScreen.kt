@@ -67,7 +67,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bettershell.app.data.AuthType
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.data.ServerRepository
 import com.bettershell.app.data.TerminalPreferencesRepository
@@ -76,9 +75,6 @@ import com.bettershell.app.ui.components.LucideIcons
 import com.bettershell.app.ui.components.OpenAiDropdownMenu
 import com.bettershell.app.ui.components.OpenAiMenuItemData
 import com.bettershell.app.ui.components.getCardShape
-import com.bettershell.app.ui.theme.AccentCyan
-import com.bettershell.app.ui.theme.AccentGreen
-import com.bettershell.app.ui.theme.AccentOrange
 import com.bettershell.app.ui.theme.isAppInDarkTheme
 import kotlinx.coroutines.launch
 
@@ -421,44 +417,14 @@ fun ServerCard(
                         .weight(1f)
                         .padding(end = 8.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = server.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = titleColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        val badgeLabel = when (server.authType) {
-                            AuthType.DEMO_MOCK -> "Demo"
-                            AuthType.PASSWORD -> "密码"
-                            AuthType.PRIVATE_KEY -> "密钥"
-                        }
-                        val badgeColor = when (server.authType) {
-                            AuthType.DEMO_MOCK -> AccentGreen
-                            AuthType.PASSWORD -> AccentOrange
-                            AuthType.PRIVATE_KEY -> AccentCyan
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(badgeColor.copy(alpha = 0.15f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = badgeLabel,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = badgeColor
-                            )
-                        }
-                    }
+                    Text(
+                        text = server.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = titleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
                     Spacer(modifier = Modifier.height(3.dp))
 
@@ -573,34 +539,9 @@ fun ServerGridCard(
             Column(modifier = Modifier.padding(14.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val badgeLabel = when (server.authType) {
-                        AuthType.DEMO_MOCK -> "Demo"
-                        AuthType.PASSWORD -> "密码"
-                        AuthType.PRIVATE_KEY -> "密钥"
-                    }
-                    val badgeColor = when (server.authType) {
-                        AuthType.DEMO_MOCK -> AccentGreen
-                        AuthType.PASSWORD -> AccentOrange
-                        AuthType.PRIVATE_KEY -> AccentCyan
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(badgeColor.copy(alpha = 0.15f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = badgeLabel,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = badgeColor
-                        )
-                    }
-
                     Box {
                         IconButton(
                             onClick = { menuExpanded = true },
