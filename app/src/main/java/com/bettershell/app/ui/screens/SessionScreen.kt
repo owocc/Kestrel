@@ -168,6 +168,8 @@ import com.bettershell.app.ui.components.AgentLogsBottomSheet
 import com.bettershell.app.ui.components.AgentChatView
 import com.bettershell.app.ui.components.ModeTogglePill
 import com.bettershell.app.ui.components.SessionMode
+import com.bettershell.app.ui.components.bottomSheetTopBorder
+import com.bettershell.app.ui.theme.isAppInDarkTheme
 import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -1197,10 +1199,13 @@ fun ToolsBottomSheet(
             }
         }
     ) {
+        val isDarkLocal = isAppInDarkTheme
+        val topBorderColor = if (isDarkLocal) Color(0xFF383838) else Color(0xFFD1D5DB)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.67f)
+                .bottomSheetTopBorder(strokeWidth = 1.dp, color = topBorderColor, cornerRadius = 28.dp)
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp)
         ) {
@@ -1472,10 +1477,13 @@ fun SessionSwitcherSheet(
             }
         }
     ) {
+        val isDarkLocal = isAppInDarkTheme
+        val topBorderColor = if (isDarkLocal) Color(0xFF383838) else Color(0xFFD1D5DB)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.67f)
+                .bottomSheetTopBorder(strokeWidth = 1.dp, color = topBorderColor, cornerRadius = 28.dp)
                 .padding(horizontal = 20.dp)
         ) {
             // 规范化纯净居中标题，无图标，无关闭按钮
@@ -1489,7 +1497,6 @@ fun SessionSwitcherSheet(
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
             )
-
             Spacer(modifier = Modifier.height(14.dp))
 
             Column(

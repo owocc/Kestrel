@@ -62,6 +62,7 @@ import com.bettershell.app.terminal.AgentEventLogItem
 import com.bettershell.app.ui.theme.AccentCyan
 import com.bettershell.app.ui.theme.AccentGreen
 import com.bettershell.app.ui.theme.AccentOrange
+import com.bettershell.app.ui.theme.isAppInDarkTheme
 import com.bettershell.app.ui.theme.AccentRed
 
 /**
@@ -92,10 +93,13 @@ fun AgentLogsBottomSheet(
             }
         }
     ) {
+        val isDark = isAppInDarkTheme
+        val topBorderColor = if (isDark) Color(0xFF383838) else Color(0xFFD1D5DB)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.67f)
+                .bottomSheetTopBorder(strokeWidth = 1.dp, color = topBorderColor, cornerRadius = 28.dp)
                 .padding(horizontal = 16.dp)
         ) {
             // Header Bar：居中标题，右侧保留纯文本快捷跳转

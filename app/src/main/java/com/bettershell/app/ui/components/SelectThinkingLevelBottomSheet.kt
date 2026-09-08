@@ -18,6 +18,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -58,10 +59,12 @@ fun SelectThinkingLevelBottomSheet(
             }
         }
     ) {
+        val topBorderColor = if (isDark) Color(0xFF383838) else Color(0xFFD1D5DB)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.67f)
+                .bottomSheetTopBorder(strokeWidth = 1.dp, color = topBorderColor, cornerRadius = 28.dp)
                 .padding(horizontal = 20.dp)
         ) {
             // 规范化纯净居中标题

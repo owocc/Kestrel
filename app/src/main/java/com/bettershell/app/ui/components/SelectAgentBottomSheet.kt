@@ -66,10 +66,12 @@ fun SelectAgentBottomSheet(
             }
         }
     ) {
+        val topBorderColor = if (isDark) Color(0xFF383838) else Color(0xFFD1D5DB)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.67f)
+                .bottomSheetTopBorder(strokeWidth = 1.dp, color = topBorderColor, cornerRadius = 28.dp)
                 .padding(horizontal = 20.dp)
         ) {
             // 居中标题
