@@ -16,6 +16,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -100,6 +106,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import kotlin.math.roundToInt
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -182,10 +195,8 @@ fun SessionScreen(
         derivedStateOf { imeInsets.getBottom(density) > 0 }
     }
 
-    val compactDrawerHeightDp = 240.dp
-    val maxDrawerHeightDp = 420.dp
-    val compactDrawerHeightPx = with(density) { compactDrawerHeightDp.toPx() }
-    val maxDrawerHeightPx = with(density) { maxDrawerHeightDp.toPx() }
+    val drawerHeightDp = 290.dp
+    val drawerHeightPx = with(density) { drawerHeightDp.toPx() }
 
     val drawerAnimatable = remember { androidx.compose.animation.core.Animatable(0f) }
     val currentDrawerHeightDp = with(density) { drawerAnimatable.value.toDp() }
@@ -436,7 +447,7 @@ fun SessionScreen(
                                     focusManager.clearFocus()
                                     keyboardController?.hide()
                                     drawerAnimatable.animateTo(
-                                        targetValue = compactDrawerHeightPx,
+                                        targetValue = drawerHeightPx,
                                         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
                                     )
                                 } else {
@@ -471,30 +482,16 @@ fun SessionScreen(
                                 .height(currentDrawerHeightDp)
                         ) {
                             GoogleMessagesToolsDrawer(
-                                isFullyExpanded = drawerAnimatable.value > compactDrawerHeightPx + 20f,
                                 onDragDelta = { delta ->
                                     coroutineScope.launch {
                                         drawerAnimatable.snapTo(
-                                            (drawerAnimatable.value - delta).coerceIn(0f, maxDrawerHeightPx)
+                                            (drawerAnimatable.value - delta).coerceIn(0f, drawerHeightPx)
                                         )
                                     }
                                 },
                                 onDragEnd = {
                                     val current = drawerAnimatable.value
-                                    val target = when {
-                                        current > (compactDrawerHeightPx + maxDrawerHeightPx) / 2f -> maxDrawerHeightPx
-                                        current > compactDrawerHeightPx / 2f -> compactDrawerHeightPx
-                                        else -> 0f
-                                    }
-                                    coroutineScope.launch {
-                                        drawerAnimatable.animateTo(
-                                            targetValue = target,
-                                            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
-                                        )
-                                    }
-                                },
-                                onToggleExpand = {
-                                    val target = if (drawerAnimatable.value > compactDrawerHeightPx + 20f) compactDrawerHeightPx else maxDrawerHeightPx
+                                    val target = if (current > drawerHeightPx / 2f) drawerHeightPx else 0f
                                     coroutineScope.launch {
                                         drawerAnimatable.animateTo(
                                             targetValue = target,
@@ -1019,226 +1016,224 @@ fun ExpandedInputSheet(
     }
 }
 
+data class ToolItemData(
+    val id: String,
+    val label: String,
+    val icon: ImageVector,
+    val isScript: Boolean = false,
+    val command: String? = null,
+    val symbol: String? = null,
+    val isClear: Boolean = false
+)
+
 /**
- * Google Messages Style Tools Drawer (Image #2 / #3)
- * 3-Column Grid of circular action cards
+ * Google Messages Style Tools Drawer
+ * - Full screen width, no border, no bottom corners, flat surface
+ * - Nested scrolling: scroll through all tools, drag down at top to close drawer
+ * - Long-press drag-and-drop reordering for tools
  */
 @Composable
 fun GoogleMessagesToolsDrawer(
-    isFullyExpanded: Boolean,
     onDragDelta: (Float) -> Unit,
     onDragEnd: () -> Unit,
-    onToggleExpand: () -> Unit,
     hasStartupScript: Boolean,
     onRunStartupScript: () -> Unit,
     onInsertCommand: (String) -> Unit,
     onInsertSymbol: (String) -> Unit,
     onClearTerminal: () -> Unit
 ) {
+    var isReorderMode by remember { mutableStateOf(false) }
+    var toolsList by remember {
+        mutableStateOf(
+            listOf(
+                ToolItemData("script", "启动脚本", Icons.Rounded.Code, isScript = true),
+                ToolItemData("agent", "Agent 状态", Icons.Rounded.SmartToy, command = "agent --status"),
+                ToolItemData("git", "Git 状态", Icons.Rounded.Code, command = "git status"),
+                ToolItemData("files", "文件列表", Icons.Rounded.Terminal, command = "ls -la"),
+                ToolItemData("top", "进程监控", Icons.Rounded.Memory, command = "top"),
+                ToolItemData("python", "Python", Icons.Rounded.Terminal, command = "python3 agent.py"),
+                ToolItemData("diff", "Git Diff", Icons.Rounded.Code, command = "git diff"),
+                ToolItemData("log", "Git Log", Icons.Rounded.Code, command = "git log --oneline -n 10"),
+                ToolItemData("docker", "Docker", Icons.Rounded.Memory, command = "docker ps"),
+                ToolItemData("ports", "网络端口", Icons.Rounded.Terminal, command = "ss -tlpn || netstat -tlpn"),
+                ToolItemData("memory", "内存磁盘", Icons.Rounded.Memory, command = "free -h && df -h"),
+                ToolItemData("pipe", "管道符 |", Icons.Rounded.Code, symbol = " | "),
+                ToolItemData("home", "主目录 ~/", Icons.Rounded.Folder, symbol = "~/"),
+                ToolItemData("sudo", "常用 sudo", Icons.Rounded.Terminal, symbol = "sudo "),
+                ToolItemData("clear", "清空终端", Icons.Rounded.DeleteSweep, isClear = true)
+            )
+        )
+    }
+
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(Unit) {
+        gridState.scrollToItem(0)
+    }
+
+
     Surface(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxSize(),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         shadowElevation = 0.dp
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Fixed Arrow / drag handle at top (Tapping or dragging toggles full expansion)
+            // Header Bar: status, drag handle, reorder toggle
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-                    .pointerInput(Unit) {
-                        detectVerticalDragGestures(
-                            onVerticalDrag = { _, dragAmount ->
-                                onDragDelta(dragAmount)
-                            },
-                            onDragEnd = {
-                                onDragEnd()
-                            }
-                        )
-                    }
-                    .clickable(onClick = onToggleExpand)
-                    .padding(vertical = 6.dp),
-                horizontalArrangement = Arrangement.Center,
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = if (isFullyExpanded) Icons.Rounded.KeyboardArrowDown else Icons.Rounded.KeyboardArrowUp,
-                    contentDescription = if (isFullyExpanded) "收起部分工具" else "展开更多工具",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp)
+                if (isReorderMode) {
+                    Text(
+                        text = "拖拽卡片以调整顺序",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AccentOrange,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Spacer(modifier = Modifier.width(60.dp))
+                }
+
+                // Center Drag Handle (touch to pull down or close drawer)
+                Box(
+                    modifier = Modifier
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures(
+                                onVerticalDrag = { _, dragAmount -> onDragDelta(dragAmount) },
+                                onDragEnd = { onDragEnd() }
+                            )
+                        }
+                        .padding(vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(40.dp)
+                            .height(5.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f))
+                    )
+                }
+
+                // Right: Reorder mode toggle button
+                Text(
+                    text = if (isReorderMode) "完成" else "自定义排序",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isReorderMode) AccentGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { isReorderMode = !isReorderMode }
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
                 )
             }
 
-            // Scrollable Content Column
-            Column(
+            // LazyVerticalGrid: native 3-column scrollable grid!
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                state = gridState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp)
-                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalArrangement = Arrangement.SpaceAround
             ) {
+                itemsIndexed(toolsList, key = { _, item -> item.id }) { index, item ->
+                    val isDragging = draggingIndex == index
 
-            // 3x3 Essential Tool Grid
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Row 1
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround
-                ) {
-                    ToolGridItem(
-                        icon = Icons.Rounded.Code,
-                        label = "启动脚本",
-                        highlight = hasStartupScript,
-                        onClick = onRunStartupScript
-                    )
-                    ToolGridItem(
-                        icon = Icons.Rounded.SmartToy,
-                        label = "Agent 状态",
-                        onClick = { onInsertCommand("agent --status") }
-                    )
-                    ToolGridItem(
-                        icon = Icons.Rounded.Code,
-                        label = "Git 状态",
-                        onClick = { onInsertCommand("git status") }
-                    )
-                }
+                    Box(
+                        modifier = Modifier
+                            .zIndex(if (isDragging) 10f else 1f)
+                            .graphicsLayer {
+                                if (isDragging) {
+                                    translationX = dragOffset.x
+                                    translationY = dragOffset.y
+                                    scaleX = 1.12f
+                                    scaleY = 1.12f
+                                }
+                            }
+                            .then(
+                                if (isReorderMode) {
+                                    Modifier.pointerInput(index) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                draggingIndex = index
+                                                dragOffset = Offset.Zero
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                dragOffset += dragAmount
 
-                // Row 2
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround
-                ) {
-                    ToolGridItem(
-                        icon = Icons.Rounded.Terminal,
-                        label = "文件列表",
-                        onClick = { onInsertCommand("ls -la") }
-                    )
-                    ToolGridItem(
-                        icon = Icons.Rounded.Memory,
-                        label = "进程监控",
-                        onClick = { onInsertCommand("top") }
-                    )
-                    ToolGridItem(
-                        icon = Icons.Rounded.Terminal,
-                        label = "Python",
-                        onClick = { onInsertCommand("python3 agent.py") }
-                    )
-                }
+                                                val cellWidthPx = size.width.toFloat()
+                                                val cellHeightPx = size.height.toFloat()
+                                                val deltaCol = (dragOffset.x / cellWidthPx).roundToInt()
+                                                val deltaRow = (dragOffset.y / cellHeightPx).roundToInt()
+                                                val targetIndex = (draggingIndex!! + deltaRow * 3 + deltaCol)
+                                                    .coerceIn(0, toolsList.lastIndex)
 
-                // Row 3
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround
-                ) {
-                    ToolGridItem(
-                        icon = Icons.Rounded.Code,
-                        label = "管道符 |",
-                        onClick = { onInsertSymbol(" | ") }
-                    )
-                    ToolGridItem(
-                        icon = Icons.Rounded.Folder,
-                        label = "主目录 ~/",
-                        onClick = { onInsertSymbol("~/") }
-                    )
-                    ToolGridItem(
-                        icon = Icons.Rounded.DeleteSweep,
-                        label = "清空终端",
-                        onClick = onClearTerminal
-                    )
-                }
-            }
-
-            // Extended tools section visible when isFullyExpanded
-            if (isFullyExpanded) {
-                Spacer(modifier = Modifier.height(14.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = "常用 CLI 指令与快捷符号:",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Extended command chips
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    listOf("git diff", "git log -n 5", "docker ps", "curl -I", "free -h", "netstat -tlpn").forEach { cmd ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                                .clickable { onInsertCommand(cmd) }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = cmd,
-                                style = TextStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            )
-                        }
+                                                if (targetIndex != draggingIndex) {
+                                                    val updated = toolsList.toMutableList()
+                                                    val moved = updated.removeAt(draggingIndex!!)
+                                                    updated.add(targetIndex, moved)
+                                                    toolsList = updated
+                                                    draggingIndex = targetIndex
+                                                    dragOffset = Offset.Zero
+                                                }
+                                            },
+                                            onDragEnd = {
+                                                draggingIndex = null
+                                                dragOffset = Offset.Zero
+                                            },
+                                            onDragCancel = {
+                                                draggingIndex = null
+                                                dragOffset = Offset.Zero
+                                            }
+                                        )
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ToolGridItem(
+                            icon = item.icon,
+                            label = item.label,
+                            highlight = item.isScript && hasStartupScript,
+                            isReordering = isReorderMode,
+                            onClick = {
+                                if (!isReorderMode) {
+                                    when {
+                                        item.isScript -> onRunStartupScript()
+                                        item.command != null -> onInsertCommand(item.command)
+                                        item.symbol != null -> onInsertSymbol(item.symbol)
+                                        item.isClear -> onClearTerminal()
+                                    }
+                                }
+                            }
+                        )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Extended symbol chips
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    listOf("&&", "||", ">", ">>", "2>&1", "sudo", "grep", "tail -f", "awk", "find", "exit").forEach { sym ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                                .clickable { onInsertSymbol(" $sym ") }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = sym,
-                                style = TextStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-            }
             }
         }
     }
 }
+
 @Composable
 fun ToolGridItem(
     icon: ImageVector,
     label: String,
     highlight: Boolean = false,
+    isReordering: Boolean = false,
     onClick: () -> Unit
 ) {
     Column(
@@ -1251,19 +1246,26 @@ fun ToolGridItem(
     ) {
         Box(
             modifier = Modifier
-                .size(52.dp)
+                .size(54.dp)
                 .clip(CircleShape)
                 .background(
-                    if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-                )
-                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+                    when {
+                        highlight -> MaterialTheme.colorScheme.primary
+                        isReordering -> AccentOrange.copy(alpha = 0.2f)
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (highlight) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(24.dp)
+                tint = when {
+                    highlight -> MaterialTheme.colorScheme.onPrimary
+                    isReordering -> AccentOrange
+                    else -> MaterialTheme.colorScheme.onSurface
+                },
+                modifier = Modifier.size(26.dp)
             )
         }
 
