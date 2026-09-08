@@ -47,7 +47,7 @@ fun AppAboutScreen(
     onBack: () -> Unit
 ) {
     val isDark = isAppInDarkTheme
-
+    val context = androidx.compose.ui.platform.LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -123,11 +123,23 @@ fun AppAboutScreen(
                     position = CardPosition.MIDDLE
                 )
 
-                // 开源仓库地址
+                // 开源仓库地址 (点击在系统默认浏览器中打开)
                 OpenAiSettingRow(
                     title = "开源仓库",
                     subtitle = AppConstants.GITHUB_REPO_URL,
-                    position = CardPosition.MIDDLE
+                    showChevron = true,
+                    position = CardPosition.MIDDLE,
+                    onClick = {
+                        try {
+                            val intent = android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(AppConstants.GITHUB_REPO_URL)
+                            )
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
                 )
                 OpenAiSettingRow(
                     title = "开源协议",
