@@ -212,26 +212,21 @@ fun SessionScreen(
             keyboardHeightDp = currentImeBottomDp
         }
     }
-
     var isToolsOpen by remember { mutableStateOf(false) }
-    var isKeyboardCoveringTools by remember { mutableStateOf(false) }
     var isExpandedHalfScreen by remember { mutableStateOf(false) }
-
-    // Clear handoff flag as soon as keyboard is open
-    LaunchedEffect(isKeyboardOpen) {
-        if (isKeyboardOpen) {
-            isKeyboardCoveringTools = false
-        }
-    }
 
     val toolsTargetHeightDp = if (isExpandedHalfScreen) halfScreenHeightDp else keyboardHeightDp
 
+    // When tools are open OR keyboard is open: maintain keyboard height underneath with ZERO collapse animation!
+    // Only animate down to 0 when NEITHER keyboard nor tools are active!
+    val targetToolsHeight = when {
+        isToolsOpen -> toolsTargetHeightDp
+        isKeyboardOpen -> keyboardHeightDp
+        else -> 0.dp
+    }
+
     val animatedToolsHeightDp by animateDpAsState(
-        targetValue = when {
-            isToolsOpen -> toolsTargetHeightDp
-            isKeyboardCoveringTools -> keyboardHeightDp
-            else -> 0.dp
-        },
+        targetValue = targetToolsHeight,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessMediumLow
@@ -239,15 +234,7 @@ fun SessionScreen(
         label = "toolsHeight"
     )
 
-    // Bottom container height:
-    // When keyboard is open: follows keyboard directly
-    // When tools are open: follows animatedToolsHeightDp
-    // When both closed: strictly 0.dp!
-    val bottomContainerHeight = if (isKeyboardOpen) {
-        currentImeBottomDp
-    } else {
-        animatedToolsHeightDp
-    }
+    val bottomContainerHeight = maxOf(currentImeBottomDp, animatedToolsHeightDp)
     // Hierarchical back handling
     BackHandler(enabled = true) {
         when {
@@ -266,12 +253,9 @@ fun SessionScreen(
             isKeyboardOpen -> {
                 focusManager.clearFocus()
                 keyboardController?.hide()
-                isKeyboardCoveringTools = false
             }
             isToolsOpen -> {
                 isToolsOpen = false
-                isExpandedHalfScreen = false
-                isKeyboardCoveringTools = false
             }
             else -> {
                 onBack()
@@ -485,19 +469,17 @@ fun SessionScreen(
                                 focusManager.clearFocus()
                                 keyboardController?.hide()
                                 isToolsOpen = true
-                                isKeyboardCoveringTools = false
                             } else {
                                 isToolsOpen = false
                                 isExpandedHalfScreen = false
-                                isKeyboardCoveringTools = false
                             }
                         },
                         onExpandInput = { isExpandedInput = true },
                         onInputFocused = {
                             if (isToolsOpen) {
+                                // Only change button state! Zero collapse animation!
                                 isToolsOpen = false
                                 isExpandedHalfScreen = false
-                                isKeyboardCoveringTools = true
                             }
                         },
                         onSend = {
@@ -515,10 +497,15 @@ fun SessionScreen(
                                 .fillMaxWidth()
                                 .height(bottomContainerHeight)
                         ) {
-                            // Only render tools drawer if tools are active and keyboard is not open
-                            val shouldRenderTools = isToolsOpen && !isKeyboardOpen && bottomContainerHeight > 20.dp
+                            val shouldRenderTools = (isToolsOpen || isKeyboardOpen) && bottomContainerHeight > 20.dp
                             if (shouldRenderTools) {
-                                GoogleMessagesToolsDrawer(
+                                val toolsAlpha = if (currentImeBottomDp > 30.dp) 0f else 1f
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .alpha(toolsAlpha)
+                                ) {
+                                    GoogleMessagesToolsDrawer(
                                         onDragDelta = { delta ->
                                             if (delta > 25f) {
                                                 isToolsOpen = false
@@ -554,7 +541,8 @@ fun SessionScreen(
                                             isToolsOpen = false
                                             isExpandedHalfScreen = false
                                         }
-                                )
+                                    )
+                                }
                             }
                         }
                     }
