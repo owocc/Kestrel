@@ -13,18 +13,15 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/**
- * 抽象的 Agent 执行器协议 (支持接入不同 Agent：omp / claude / codex 等)
- */
 interface IAgentRunner {
-    val currentAgent: StateFlow<DiscoveredAgent>
+    val currentAgent: StateFlow<DiscoveredAgent?>
     val messages: StateFlow<List<ChatMessage>>
     val isBusy: StateFlow<Boolean>
     val currentStatus: StateFlow<String?>
     val eventLogs: StateFlow<List<AgentEventLogItem>>
     val rawLogs: StateFlow<String>
 
-    fun setAgent(agent: DiscoveredAgent)
+    fun setAgent(agent: DiscoveredAgent?)
     fun setModel(model: String)
     fun setThinkingLevel(level: ThinkingLevel)
     fun sendPrompt(prompt: String)
@@ -33,22 +30,26 @@ interface IAgentRunner {
 }
 
 /**
- * 通用多 Agent 协调执行器 (适配 omp 及各类 Agent CLI，标准 JSONL 抓取)
+ * 通用多 Agent 协调执行器
  */
 class UniversalAgentRunner(
-    initialAgent: DiscoveredAgent,
+    initialAgent: DiscoveredAgent?,
     private val sendRawCommand: (String) -> Unit
 ) : IAgentRunner {
 
     private val _currentAgent = MutableStateFlow(initialAgent)
-    override val currentAgent: StateFlow<DiscoveredAgent> = _currentAgent.asStateFlow()
+    override val currentAgent: StateFlow<DiscoveredAgent?> = _currentAgent.asStateFlow()
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(
         listOf(
             ChatMessage(
                 id = "init",
                 sender = ChatSender.SYSTEM,
-                content = "${initialAgent.type.displayName} Agent 引擎已就绪。支持深度思考、工具自动调用与流式回复。"
+                content = if (initialAgent != null) {
+                    "${initialAgent.type.displayName} Agent 引擎已就绪。"
+                } else {
+                    "尚未探测到已安装的 AI Agent。请点击输入框左侧 '+' 进行扫描或配置。"
+                }
             )
         )
     )
@@ -69,18 +70,22 @@ class UniversalAgentRunner(
     private val json = Json { ignoreUnknownKeys = true }
     private val lineBuffer = StringBuilder()
 
-    override fun setAgent(agent: DiscoveredAgent) {
+    override fun setAgent(agent: DiscoveredAgent?) {
         _currentAgent.value = agent
-        addEventLog(now(), "agent_switch", "切换 Agent 为: ${agent.type.displayName}", level = AgentEventLevel.INFO)
+        if (agent != null) {
+            addEventLog(now(), "agent_switch", "当前生效 Agent: ${agent.type.displayName}", level = AgentEventLevel.INFO)
+        }
     }
 
     override fun setModel(model: String) {
-        _currentAgent.value = _currentAgent.value.copy(selectedModel = model)
+        val cur = _currentAgent.value ?: return
+        _currentAgent.value = cur.copy(selectedModel = model)
         addEventLog(now(), "model_switch", "切换模型为: $model", level = AgentEventLevel.INFO)
     }
 
     override fun setThinkingLevel(level: ThinkingLevel) {
-        _currentAgent.value = _currentAgent.value.copy(thinkingLevel = level)
+        val cur = _currentAgent.value ?: return
+        _currentAgent.value = cur.copy(thinkingLevel = level)
         addEventLog(now(), "thinking_switch", "思考级别设定为: ${level.displayName}", level = AgentEventLevel.INFO)
     }
 
@@ -89,7 +94,7 @@ class UniversalAgentRunner(
             ChatMessage(
                 id = "init_${System.currentTimeMillis()}",
                 sender = ChatSender.SYSTEM,
-                content = "已清空会话上下文。"
+                content = "已重置会话上下文。"
             )
         )
     }
@@ -97,8 +102,15 @@ class UniversalAgentRunner(
     override fun sendPrompt(prompt: String) {
         val timeStr = now()
         val agent = _currentAgent.value
+        if (agent == null) {
+            _messages.value = _messages.value + ChatMessage(
+                id = "err_${System.currentTimeMillis()}",
+                sender = ChatSender.SYSTEM,
+                content = "当前未选择可用的 Agent，请点击 '+' 按钮检查已安装的 Agent。"
+            )
+            return
+        }
 
-        // 构建命令：支持通用 omp 命令组装，并带上 --model 和 --thinking 参数
         val cmdBuilder = StringBuilder()
         when (agent.type) {
             AgentType.OMP -> {

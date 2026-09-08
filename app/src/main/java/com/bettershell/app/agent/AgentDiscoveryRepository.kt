@@ -1,63 +1,44 @@
 package com.bettershell.app.agent
 
 import android.content.Context
-import android.content.SharedPreferences
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.encodeToString
+import com.bettershell.app.data.LocalAgentDatabaseHelper
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Agent 缓存与发现管理器 (对标 Multica 针对每个 Server 缓存 runtimes)
+ * Agent 发现与本地 SQL 缓存仓库
+ * - 只有首次进入或用户手动触发时才进行扫描
+ * - 存储到本地 LibSQL / SQLite 数据库中
+ * - 绝不默认假定用户安装了 omp，未安装就是未安装，完全取决于真实扫描
  */
 class AgentDiscoveryRepository(context: Context) {
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences("agent_discovery_cache", Context.MODE_PRIVATE)
-
+    private val dbHelper = LocalAgentDatabaseHelper(context.applicationContext)
     private val json = Json { ignoreUnknownKeys = true }
 
-    // 默认内置兜底 Agent：omp (即便还未探测到，也保证开箱可用)
-    val defaultFallbackAgent = DiscoveredAgent(
-        id = "omp",
-        type = AgentType.OMP,
-        command = "omp",
-        path = "/usr/local/bin/omp",
-        models = listOf("default", "gemini-3.8-flash", "claude-sonnet", "gpt-4o", "deepseek-chat"),
-        selectedModel = "default",
-        thinkingLevel = ThinkingLevel.AUTO
-    )
+    fun hasScanned(serverId: String): Boolean {
+        return dbHelper.hasScanned(serverId)
+    }
 
     fun getCachedAgents(serverId: String): List<DiscoveredAgent> {
-        val raw = prefs.getString("agents_$serverId", null) ?: return listOf(defaultFallbackAgent)
-        return try {
-            json.decodeFromString<List<DiscoveredAgent>>(raw).ifEmpty { listOf(defaultFallbackAgent) }
-        } catch (_: Exception) {
-            listOf(defaultFallbackAgent)
-        }
+        return dbHelper.getDiscoveredAgents(serverId)
     }
 
     fun saveAgents(serverId: String, agents: List<DiscoveredAgent>) {
-        try {
-            val serialized = json.encodeToString(agents)
-            prefs.edit().putString("agents_$serverId", serialized).apply()
-        } catch (_: Exception) {
-        }
+        dbHelper.saveDiscoveredAgents(serverId, agents)
     }
 
-    fun getSelectedAgentId(serverId: String): String {
-        return prefs.getString("selected_agent_$serverId", "omp") ?: "omp"
+    fun getSelectedAgentId(serverId: String): String? {
+        return dbHelper.getSelectedAgentId(serverId)
     }
 
     fun saveSelectedAgentId(serverId: String, agentId: String) {
-        prefs.edit().putString("selected_agent_$serverId", agentId).apply()
+        dbHelper.setSelectedAgentId(serverId, agentId)
     }
 
     /**
-     * 解析远程探针脚本输出的 JSON
+     * 解析远程探针脚本输出的 JSON (严格对应实际探测到的真实结果，不自动伪造任何 agent)
      */
     fun parseProbeResult(output: String): List<DiscoveredAgent>? {
         val marker = "BETTERSHELL_AGENT_PROBE_RESULT:"
@@ -75,29 +56,19 @@ class AgentDiscoveryRepository(context: Context) {
                 val path = obj["path"]?.jsonPrimitive?.content ?: ""
                 val version = obj["version"]?.jsonPrimitive?.content ?: ""
 
-                val type = AgentType.fromBinary(cmd)
-                val defaultModels = when (type) {
-                    AgentType.OMP -> listOf("default", "gemini-3.8-flash", "claude-sonnet", "gpt-4o", "deepseek-chat")
-                    AgentType.CLAUDE -> listOf("default", "claude-sonnet-4-6", "claude-haiku-4-5")
-                    AgentType.CODEX -> listOf("default", "gpt-5-codex", "codex-mini")
-                    else -> listOf("default")
-                }
-
+                val meta = SupportedAgentsCatalog.findMeta(cmd)
                 list.add(
                     DiscoveredAgent(
                         id = id,
-                        type = type,
+                        type = AgentType.fromBinary(cmd),
                         command = cmd,
                         path = path,
                         version = version,
-                        models = defaultModels,
+                        models = meta.defaultModels,
                         selectedModel = "default",
                         thinkingLevel = ThinkingLevel.AUTO
                     )
                 )
-            }
-            if (list.none { it.id == "omp" }) {
-                list.add(0, defaultFallbackAgent)
             }
             list
         } catch (_: Exception) {

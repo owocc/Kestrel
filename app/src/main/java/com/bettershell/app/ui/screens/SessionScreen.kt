@@ -226,7 +226,7 @@ fun SessionScreen(
         agentDiscoveryRepo.getSelectedAgentId(currentServer.id)
     }
     val initialAgent = remember(discoveredAgents, selectedAgentId) {
-        discoveredAgents.find { it.id == selectedAgentId } ?: discoveredAgents.firstOrNull() ?: agentDiscoveryRepo.defaultFallbackAgent
+        discoveredAgents.find { it.id == selectedAgentId } ?: discoveredAgents.firstOrNull()
     }
 
     val agentRunner = remember(currentServer.id) {
@@ -241,32 +241,12 @@ fun SessionScreen(
     val currentAgentStatus by agentRunner.currentStatus.collectAsState()
     val agentRawLogs by agentRunner.rawLogs.collectAsState()
     val agentEventLogs by agentRunner.eventLogs.collectAsState()
-
-    var isProbingAgents by remember { mutableStateOf(false) }
     var showAgentPickerSheet by remember { mutableStateOf(false) }
     var chatInputText by remember { mutableStateOf("") }
 
-    // 启动前对服务器自动运行探针并缓存 (对标 Multica 针对每个工作区/服务器自动探测 CLI)
-    LaunchedEffect(currentServer.id) {
-        isProbingAgents = true
-        chatTerminalSession.sendCommand("${AgentProbeScript.BASH_PROBE_SCRIPT}\n")
-    }
-
-    // 监听 Chat 管道的原始增量输出：同时分发给探针解析与 Agent 消息解析
+    // 仅监听 Chat 管道解析 JSONL 执行流 (扫描已全量移交首页服务器管理)
     LaunchedEffect(chatTerminalSession) {
         chatTerminalSession.rawChunkFlow.collect { chunk ->
-            // 1. 尝试解析探针输出
-            if (chunk.contains("BETTERSHELL_AGENT_PROBE_RESULT:")) {
-                val parsed = agentDiscoveryRepo.parseProbeResult(chunk)
-                if (!parsed.isNullOrEmpty()) {
-                    discoveredAgents = parsed
-                    agentDiscoveryRepo.saveAgents(currentServer.id, parsed)
-                    val stillValid = parsed.find { it.id == activeAgent.id } ?: parsed.first()
-                    agentRunner.setAgent(stillValid)
-                }
-                isProbingAgents = false
-            }
-            // 2. 传入 AgentRunner 解析 JSONL 执行流
             agentRunner.onRemoteChunk(chunk)
         }
     }
@@ -623,32 +603,33 @@ fun SessionScreen(
     // Agent 与模型选择底栏 Sheet (对标 Multica 针对每个工作区/服务器切换 Agent、模型和思考程度)
     if (showAgentPickerSheet) {
         AgentPickerBottomSheet(
-            agents = discoveredAgents,
+            discoveredAgents = discoveredAgents,
             selectedAgent = activeAgent,
-            isProbing = isProbingAgents,
             onSelectAgent = { newAgent ->
                 agentRunner.setAgent(newAgent)
                 agentDiscoveryRepo.saveSelectedAgentId(currentServer.id, newAgent.id)
             },
             onSelectModel = { newModel ->
                 agentRunner.setModel(newModel)
-                val updated = discoveredAgents.map {
-                    if (it.id == activeAgent.id) it.copy(selectedModel = newModel) else it
+                val curId = activeAgent?.id
+                if (curId != null) {
+                    val updated = discoveredAgents.map {
+                        if (it.id == curId) it.copy(selectedModel = newModel) else it
+                    }
+                    discoveredAgents = updated
+                    agentDiscoveryRepo.saveAgents(currentServer.id, updated)
                 }
-                discoveredAgents = updated
-                agentDiscoveryRepo.saveAgents(currentServer.id, updated)
             },
             onSelectThinkingLevel = { newLevel ->
                 agentRunner.setThinkingLevel(newLevel)
-                val updated = discoveredAgents.map {
-                    if (it.id == activeAgent.id) it.copy(thinkingLevel = newLevel) else it
+                val curId = activeAgent?.id
+                if (curId != null) {
+                    val updated = discoveredAgents.map {
+                        if (it.id == curId) it.copy(thinkingLevel = newLevel) else it
+                    }
+                    discoveredAgents = updated
+                    agentDiscoveryRepo.saveAgents(currentServer.id, updated)
                 }
-                discoveredAgents = updated
-                agentDiscoveryRepo.saveAgents(currentServer.id, updated)
-            },
-            onRefreshProbe = {
-                isProbingAgents = true
-                chatTerminalSession.sendCommand("${AgentProbeScript.BASH_PROBE_SCRIPT}\n")
             },
             onDismiss = { showAgentPickerSheet = false }
         )

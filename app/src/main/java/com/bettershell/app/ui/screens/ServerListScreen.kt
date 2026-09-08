@@ -68,6 +68,9 @@ import com.bettershell.app.ui.theme.AccentCyan
 import com.bettershell.app.ui.theme.AccentGreen
 import com.bettershell.app.ui.theme.AccentOrange
 import kotlinx.coroutines.launch
+import com.bettershell.app.agent.AgentDiscoveryRepository
+import com.bettershell.app.agent.SshAgentScanner
+import com.bettershell.app.ui.components.ServerAgentScanBottomSheet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,14 +83,17 @@ fun ServerListScreen(
     val terminalPrefs by prefsRepository.preferences.collectAsState()
     var showAddEditDialog by remember { mutableStateOf(false) }
     var editingServer by remember { mutableStateOf<ServerConfig?>(null) }
+    var scanningServer by remember { mutableStateOf<ServerConfig?>(null) }
+    var isScanningAgents by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val agentDiscoveryRepo = remember { AgentDiscoveryRepository(context) }
     val scope = rememberCoroutineScope()
 
     val isDark = when (terminalPrefs.themeMode) {
         AppThemeMode.DARK -> true
         AppThemeMode.LIGHT -> false
-        AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+        AppThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
     }
-
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -237,6 +243,9 @@ fun ServerListScreen(
                                 editingServer = server
                                 showAddEditDialog = true
                             },
+                            onScanAgents = {
+                                scanningServer = server
+                            },
                             onDelete = {
                                 scope.launch {
                                     repository.deleteServer(server.id)
@@ -269,6 +278,33 @@ fun ServerListScreen(
             }
         )
     }
+    // 服务器 Agent 扫描与环境管理抽屉
+    if (scanningServer != null) {
+        val targetServer = scanningServer!!
+        var serverAgents by remember(targetServer.id) {
+            mutableStateOf(agentDiscoveryRepo.getCachedAgents(targetServer.id))
+        }
+
+        ServerAgentScanBottomSheet(
+            server = targetServer,
+            discoveredAgents = serverAgents,
+            isScanning = isScanningAgents,
+            onStartScan = {
+                isScanningAgents = true
+                scope.launch {
+                    val probeOutput = SshAgentScanner.scanServer(targetServer)
+                    val parsed = agentDiscoveryRepo.parseProbeResult(probeOutput) ?: emptyList()
+                    serverAgents = parsed
+                    agentDiscoveryRepo.saveAgents(targetServer.id, parsed)
+                    isScanningAgents = false
+                }
+            },
+            onDismiss = {
+                scanningServer = null
+                isScanningAgents = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -276,6 +312,7 @@ fun ServerCard(
     server: ServerConfig,
     onConnect: () -> Unit,
     onEdit: () -> Unit,
+    onScanAgents: () -> Unit,
     onDelete: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -283,15 +320,12 @@ fun ServerCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(18.dp))
-            .clickable(onClick = onConnect),
+            .clip(RoundedCornerShape(16.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp
+        shadowElevation = 0.dp
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -405,6 +439,16 @@ fun ServerCard(
                             onDismissRequest = { menuExpanded = false },
                             modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                         ) {
+                            DropdownMenuItem(
+                                text = { Text("扫描 Agent", color = MaterialTheme.colorScheme.onSurface) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onScanAgents()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.SmartToy, null, tint = AccentCyan)
+                                }
+                            )
                             DropdownMenuItem(
                                 text = { Text("编辑配置", color = MaterialTheme.colorScheme.onSurface) },
                                 onClick = {
