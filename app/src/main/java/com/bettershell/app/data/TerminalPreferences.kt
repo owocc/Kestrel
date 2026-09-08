@@ -65,7 +65,7 @@ class TerminalPreferencesRepository(context: Context) {
     }
 
     fun updateFontSize(sizeSp: Float) {
-        val clamped = sizeSp.coerceIn(9f, 20f)
+        val clamped = (Math.round(sizeSp * 10f) / 10f).coerceIn(8f, 26f)
         prefs.edit().putFloat("font_size", clamped).apply()
         _preferences.value = _preferences.value.copy(fontSizeSp = clamped)
     }

@@ -32,6 +32,11 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -44,6 +49,7 @@ import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FontDownload
+import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material.icons.rounded.Refresh
@@ -114,6 +120,8 @@ import com.bettershell.app.ui.theme.InputTextSecondary
 import com.bettershell.app.ui.theme.TerminalBlack
 import com.bettershell.app.ui.theme.TerminalCardBg
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -151,6 +159,8 @@ fun SessionScreen(
     var showServerSettingsSheet by remember { mutableStateOf(false) }
     var showSessionSwitcherSheet by remember { mutableStateOf(false) }
     var sessionToRename by remember { mutableStateOf<ServerSessionItem?>(null) }
+    var showFontSizeIndicator by remember { mutableStateOf(false) }
+    var indicatorDismissJob by remember { mutableStateOf<Job?>(null) }
 
     // Keyboard & Back Gesture management
     val focusManager = LocalFocusManager.current
@@ -222,6 +232,43 @@ fun SessionScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .pointerInput(terminalPrefs.fontSizeSp) {
+                        awaitEachGesture {
+                            var initialDistance = 0f
+                            var baseFontSize = terminalPrefs.fontSizeSp
+
+                            do {
+                                val event = awaitPointerEvent()
+                                val activePointers = event.changes.filter { it.pressed }
+
+                                if (activePointers.size >= 2) {
+                                    val p1 = activePointers[0].position
+                                    val p2 = activePointers[1].position
+                                    val currentDistance = (p1 - p2).getDistance()
+
+                                    if (initialDistance == 0f) {
+                                        initialDistance = currentDistance
+                                        baseFontSize = terminalPrefs.fontSizeSp
+                                    } else if (initialDistance > 0f && currentDistance > 0f) {
+                                        val scale = currentDistance / initialDistance
+                                        val newSize = (baseFontSize * scale).coerceIn(8f, 26f)
+                                        if (kotlin.math.abs(newSize - terminalPrefs.fontSizeSp) >= 0.2f) {
+                                            prefsRepository.updateFontSize(newSize)
+                                            showFontSizeIndicator = true
+                                            indicatorDismissJob?.cancel()
+                                            indicatorDismissJob = coroutineScope.launch {
+                                                delay(1200)
+                                                showFontSizeIndicator = false
+                                            }
+                                        }
+                                    }
+                                    activePointers.forEach { it.consume() }
+                                } else {
+                                    initialDistance = 0f
+                                }
+                            } while (event.changes.any { it.pressed })
+                        }
+                    }
             ) {
                 SelectionContainer {
                     val verticalScrollState = rememberScrollState()
@@ -250,6 +297,42 @@ fun SessionScreen(
                             softWrap = terminalPrefs.softWrap,
                             modifier = if (terminalPrefs.softWrap) Modifier.fillMaxWidth() else Modifier
                         )
+                    }
+                }
+
+                // Floating Font Size Indicator during pinch gesture
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showFontSizeIndicator,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = DarkSurfaceVariant.copy(alpha = 0.95f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkOutline),
+                        shadowElevation = 6.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.FormatSize,
+                                contentDescription = null,
+                                tint = AccentCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "字号: ${terminalPrefs.fontSizeSp.toInt()} sp",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkOnSurface
+                            )
+                        }
                     }
                 }
             }
