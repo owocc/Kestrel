@@ -149,6 +149,12 @@ import com.bettershell.app.ui.theme.AccentOrange
 import com.bettershell.app.ui.theme.AccentRed
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import com.bettershell.app.agent.AgentDiscoveryRepository
+import com.bettershell.app.agent.AgentProbeScript
+import com.bettershell.app.agent.DiscoveredAgent
+import com.bettershell.app.agent.UniversalAgentRunner
+import com.bettershell.app.ui.components.AgentPickerBottomSheet
+import com.bettershell.app.ui.components.ChatIntegratedInputBar
 import com.bettershell.app.terminal.OmpAgentClient
 import com.bettershell.app.ui.components.AgentLogsBottomSheet
 import com.bettershell.app.ui.components.AgentChatView
@@ -210,21 +216,58 @@ fun SessionScreen(
     var sessionToRename by remember { mutableStateOf<ServerSessionItem?>(null) }
     var showFontSizeIndicator by remember { mutableStateOf(false) }
     var indicatorDismissJob by remember { mutableStateOf<Job?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val agentDiscoveryRepo = remember { AgentDiscoveryRepository(context) }
 
-    val ompAgentClient = remember(currentServer.id) {
-        OmpAgentClient(
+    var discoveredAgents by remember(currentServer.id) {
+        mutableStateOf(agentDiscoveryRepo.getCachedAgents(currentServer.id))
+    }
+    val selectedAgentId = remember(currentServer.id) {
+        agentDiscoveryRepo.getSelectedAgentId(currentServer.id)
+    }
+    val initialAgent = remember(discoveredAgents, selectedAgentId) {
+        discoveredAgents.find { it.id == selectedAgentId } ?: discoveredAgents.firstOrNull() ?: agentDiscoveryRepo.defaultFallbackAgent
+    }
+
+    val agentRunner = remember(currentServer.id) {
+        UniversalAgentRunner(
+            initialAgent = initialAgent,
             sendRawCommand = { cmd -> chatTerminalSession.sendCommand(cmd) }
         )
     }
-    val chatMessages by ompAgentClient.messages.collectAsState()
-    val isAgentBusy by ompAgentClient.isAgentBusy.collectAsState()
-    val currentAgentStatus by ompAgentClient.currentStatus.collectAsState()
-    val agentRawLogs by ompAgentClient.rawLogs.collectAsState()
-    val agentEventLogs by ompAgentClient.eventLogs.collectAsState()
-    // 远程输出流驱动 ompAgentClient 解析 (使用 Chat 专属独立会话的单次增量流 rawChunkFlow，杜绝全量累加导致的重复重解析)
+    val activeAgent by agentRunner.currentAgent.collectAsState()
+    val chatMessages by agentRunner.messages.collectAsState()
+    val isAgentBusy by agentRunner.isBusy.collectAsState()
+    val currentAgentStatus by agentRunner.currentStatus.collectAsState()
+    val agentRawLogs by agentRunner.rawLogs.collectAsState()
+    val agentEventLogs by agentRunner.eventLogs.collectAsState()
+
+    var isProbingAgents by remember { mutableStateOf(false) }
+    var showAgentPickerSheet by remember { mutableStateOf(false) }
+    var chatInputText by remember { mutableStateOf("") }
+
+    // 启动前对服务器自动运行探针并缓存 (对标 Multica 针对每个工作区/服务器自动探测 CLI)
+    LaunchedEffect(currentServer.id) {
+        isProbingAgents = true
+        chatTerminalSession.sendCommand("${AgentProbeScript.BASH_PROBE_SCRIPT}\n")
+    }
+
+    // 监听 Chat 管道的原始增量输出：同时分发给探针解析与 Agent 消息解析
     LaunchedEffect(chatTerminalSession) {
         chatTerminalSession.rawChunkFlow.collect { chunk ->
-            ompAgentClient.onRemoteOutput(chunk)
+            // 1. 尝试解析探针输出
+            if (chunk.contains("BETTERSHELL_AGENT_PROBE_RESULT:")) {
+                val parsed = agentDiscoveryRepo.parseProbeResult(chunk)
+                if (!parsed.isNullOrEmpty()) {
+                    discoveredAgents = parsed
+                    agentDiscoveryRepo.saveAgents(currentServer.id, parsed)
+                    val stillValid = parsed.find { it.id == activeAgent.id } ?: parsed.first()
+                    agentRunner.setAgent(stillValid)
+                }
+                isProbingAgents = false
+            }
+            // 2. 传入 AgentRunner 解析 JSONL 执行流
+            agentRunner.onRemoteChunk(chunk)
         }
     }
 
@@ -249,6 +292,9 @@ fun SessionScreen(
             }
             showToolsSheet -> {
                 showToolsSheet = false
+            }
+            showAgentPickerSheet -> {
+                showAgentPickerSheet = false
             }
             isExpandedInput -> {
                 isExpandedInput = false
@@ -440,79 +486,98 @@ fun SessionScreen(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
         ) {
-            // Expanded Input State (Image #5 / #6)
-            androidx.compose.animation.AnimatedVisibility(
-                visible = isExpandedInput,
-                enter = androidx.compose.animation.slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
-                ) + fadeIn(),
-                exit = androidx.compose.animation.slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-                ) + fadeOut()
-            ) {
-                ExpandedInputSheet(
-                    text = inputText,
-                    onTextChanged = { inputText = it },
-                    fontFamily = terminalPrefs.font.toComposeFontFamily(),
-                    onCollapse = { isExpandedInput = false },
-                    onSend = {
-                        val textToSend = inputText.trim()
-                        if (textToSend.isNotBlank()) {
-                            inputText = ""
-                            isExpandedInput = false
-                            if (currentMode == SessionMode.CHAT) {
-                                ompAgentClient.sendPrompt(textToSend)
-                            } else {
-                                shellTerminalSession.sendCommand(textToSend)
-                            }
-                        }
-                    }
-                )
-            }
-
-            if (!isExpandedInput) {
-                // Default State & Tool Drawer (Image #1, #2, #3, #4)
+            if (currentMode == SessionMode.CHAT) {
+                // Chat 专属独立输入体系 (融合胶囊风格，对齐用户提供的 ChatGPT 截图)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .imePadding()
                         .padding(bottom = bottomNavPadding)
                 ) {
-                    // Quick Shortcut Bar (ENTER, ESC, TAB, CTRL-C, CTRL-D, Arrows)
-                    QuickShortcutBar(
-                        onSendRaw = { shellTerminalSession.sendRaw(it) },
-                        onInsertText = { inputText += it }
-                    )
-
-                    // Google Messages Style Input Bar (Image #1, #4)
-                    GoogleMessagesInputBar(
-                        text = inputText,
-                        onTextChanged = { inputText = it },
-                        isToolsExpanded = showToolsSheet,
-                        onToggleTools = {
+                    ChatIntegratedInputBar(
+                        text = chatInputText,
+                        onTextChanged = { chatInputText = it },
+                        activeAgent = activeAgent,
+                        isAgentBusy = isAgentBusy,
+                        isDark = isDark,
+                        onOpenAgentPicker = {
                             focusManager.clearFocus()
                             keyboardController?.hide()
-                            showToolsSheet = true
+                            showAgentPickerSheet = true
                         },
-                        onExpandInput = { isExpandedInput = true },
-                        onInputFocused = {
-                            // Focus in textfield
-                        },
-                        isChatMode = currentMode == SessionMode.CHAT,
+                        onSend = {
+                            val promptToSend = chatInputText.trim()
+                            if (promptToSend.isNotBlank()) {
+                                chatInputText = ""
+                                agentRunner.sendPrompt(promptToSend)
+                            }
+                        }
+                    )
+                }
+            } else {
+                // Shell 终端专属独立输入体系 (快捷键栏 + 药丸命令输入框 + 多行扩展支持)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isExpandedInput,
+                    enter = androidx.compose.animation.slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                    ) + fadeIn(),
+                    exit = androidx.compose.animation.slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                    ) + fadeOut()
+                ) {
+                    ExpandedInputSheet(
+                        text = inputText,
+                        onTextChanged = { inputText = it },
+                        fontFamily = terminalPrefs.font.toComposeFontFamily(),
+                        onCollapse = { isExpandedInput = false },
                         onSend = {
                             val textToSend = inputText.trim()
                             if (textToSend.isNotBlank()) {
                                 inputText = ""
-                                if (currentMode == SessionMode.CHAT) {
-                                    ompAgentClient.sendPrompt(textToSend)
-                                } else {
-                                    shellTerminalSession.sendCommand(textToSend)
-                                }
+                                isExpandedInput = false
+                                shellTerminalSession.sendCommand(textToSend)
                             }
                         }
                     )
+                }
+
+                if (!isExpandedInput) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .imePadding()
+                            .padding(bottom = bottomNavPadding)
+                    ) {
+                        // Quick Shortcut Bar
+                        QuickShortcutBar(
+                            onSendRaw = { shellTerminalSession.sendRaw(it) },
+                            onInsertText = { inputText += it }
+                        )
+
+                        // Shell Input Bar
+                        GoogleMessagesInputBar(
+                            text = inputText,
+                            onTextChanged = { inputText = it },
+                            isToolsExpanded = showToolsSheet,
+                            onToggleTools = {
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                                showToolsSheet = true
+                            },
+                            onExpandInput = { isExpandedInput = true },
+                            onInputFocused = {},
+                            isChatMode = false,
+                            onSend = {
+                                val textToSend = inputText.trim()
+                                if (textToSend.isNotBlank()) {
+                                    inputText = ""
+                                    shellTerminalSession.sendCommand(textToSend)
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -553,6 +618,39 @@ fun SessionScreen(
                 onOpenRawLogs(agentRawLogs)
             },
             onDismiss = { showAgentLogsSheet = false }
+        )
+    }
+    // Agent 与模型选择底栏 Sheet (对标 Multica 针对每个工作区/服务器切换 Agent、模型和思考程度)
+    if (showAgentPickerSheet) {
+        AgentPickerBottomSheet(
+            agents = discoveredAgents,
+            selectedAgent = activeAgent,
+            isProbing = isProbingAgents,
+            onSelectAgent = { newAgent ->
+                agentRunner.setAgent(newAgent)
+                agentDiscoveryRepo.saveSelectedAgentId(currentServer.id, newAgent.id)
+            },
+            onSelectModel = { newModel ->
+                agentRunner.setModel(newModel)
+                val updated = discoveredAgents.map {
+                    if (it.id == activeAgent.id) it.copy(selectedModel = newModel) else it
+                }
+                discoveredAgents = updated
+                agentDiscoveryRepo.saveAgents(currentServer.id, updated)
+            },
+            onSelectThinkingLevel = { newLevel ->
+                agentRunner.setThinkingLevel(newLevel)
+                val updated = discoveredAgents.map {
+                    if (it.id == activeAgent.id) it.copy(thinkingLevel = newLevel) else it
+                }
+                discoveredAgents = updated
+                agentDiscoveryRepo.saveAgents(currentServer.id, updated)
+            },
+            onRefreshProbe = {
+                isProbingAgents = true
+                chatTerminalSession.sendCommand("${AgentProbeScript.BASH_PROBE_SCRIPT}\n")
+            },
+            onDismiss = { showAgentPickerSheet = false }
         )
     }
     if (showSessionSwitcherSheet) {

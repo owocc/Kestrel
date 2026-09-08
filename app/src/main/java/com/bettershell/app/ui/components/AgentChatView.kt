@@ -251,10 +251,8 @@ fun MulticaMessageItem(message: ChatMessage) {
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.weight(1f, fill = false)
                         ) {
-                            Text(
-                                text = message.content,
-                                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
-                                color = MaterialTheme.colorScheme.onSurface,
+                            SimpleMarkdownMessage(
+                                content = message.content,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp)
                             )
                         }
