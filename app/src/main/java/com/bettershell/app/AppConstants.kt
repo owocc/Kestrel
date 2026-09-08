@@ -6,7 +6,8 @@ package com.bettershell.app
  */
 object AppConstants {
     const val APP_NAME = "Kestrel"
-    const val APP_VERSION = "1.0"
-    const val APP_VERSION_LABEL = "版本: 1.0 (Android 16 Ready)"
+    const val APP_VERSION = "v1.0.0-alpha"
+    const val APP_VERSION_LABEL = "版本: v1.0.0-alpha (Android 16 Ready)"
+    const val GITHUB_REPO_URL = "https://github.com/owocc/Kestrel"
     const val OPEN_SOURCE_LICENSE = "Apache License 2.0"
 }

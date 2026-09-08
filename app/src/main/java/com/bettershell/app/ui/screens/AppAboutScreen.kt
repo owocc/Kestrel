@@ -119,7 +119,14 @@ fun AppAboutScreen(
                 // 中间卡片：全小圆角
                 OpenAiSettingRow(
                     title = "版本代号",
-                    subtitle = "v${AppConstants.APP_VERSION} (Android 16 Ready)",
+                    subtitle = "${AppConstants.APP_VERSION} (Android 16 Ready)",
+                    position = CardPosition.MIDDLE
+                )
+
+                // 开源仓库地址
+                OpenAiSettingRow(
+                    title = "开源仓库",
+                    subtitle = AppConstants.GITHUB_REPO_URL,
                     position = CardPosition.MIDDLE
                 )
                 OpenAiSettingRow(
