@@ -146,6 +146,10 @@ import com.bettershell.app.ui.theme.AccentOrange
 import com.bettershell.app.ui.theme.AccentRed
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import com.bettershell.app.terminal.OmpAgentClient
+import com.bettershell.app.ui.components.AgentChatView
+import com.bettershell.app.ui.components.ModeTogglePill
+import com.bettershell.app.ui.components.SessionMode
 import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -185,6 +189,7 @@ fun SessionScreen(
         terminalSession.getAnnotatedOutput(isDark)
     }
 
+    var currentMode by remember { mutableStateOf(SessionMode.SHELL) }
     var inputText by remember { mutableStateOf("") }
     var isExpandedInput by remember { mutableStateOf(false) }
     var showServerSettingsSheet by remember { mutableStateOf(false) }
@@ -193,6 +198,18 @@ fun SessionScreen(
     var showFontSizeIndicator by remember { mutableStateOf(false) }
     var indicatorDismissJob by remember { mutableStateOf<Job?>(null) }
 
+    val ompAgentClient = remember(currentServer.id) {
+        OmpAgentClient(
+            sendRawCommand = { cmd -> terminalSession.sendCommand(cmd) }
+        )
+    }
+    val chatMessages by ompAgentClient.messages.collectAsState()
+    val isAgentBusy by ompAgentClient.isAgentBusy.collectAsState()
+    val currentAgentStatus by ompAgentClient.currentStatus.collectAsState()
+    // 远程输出流驱动 ompAgentClient 解析
+    LaunchedEffect(rawAnnotatedOutput) {
+        ompAgentClient.onRemoteOutput(rawAnnotatedOutput.text)
+    }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val density = LocalDensity.current
@@ -245,6 +262,8 @@ fun SessionScreen(
                 server = currentServer,
                 activeSession = activeSessionItem,
                 connectionState = connectionState,
+                currentMode = currentMode,
+                onModeSelected = { currentMode = it },
                 softWrap = terminalPrefs.softWrap,
                 isDark = isDark,
                 onToggleSoftWrap = { prefsRepository.toggleSoftWrap() },
@@ -263,12 +282,20 @@ fun SessionScreen(
                 onOpenSettings = { showServerSettingsSheet = true }
             )
 
-            // 2D Scroll Terminal View Area (With bottom padding for collapsed input bar)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            // Content Area: Switch between Agent Chat View and Interactive Terminal View
+            if (currentMode == SessionMode.CHAT) {
+                AgentChatView(
+                    messages = chatMessages,
+                    isAgentBusy = isAgentBusy,
+                    currentStatus = currentAgentStatus,
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
                     .pointerInput(terminalPrefs.fontSizeSp) {
                         awaitEachGesture {
                             var initialDistance = 0f
@@ -378,6 +405,7 @@ fun SessionScreen(
                     }
                 }
             }
+            }
         }
 
         // Layer 2: Floating Input System (Overlaid at bottom)
@@ -405,7 +433,11 @@ fun SessionScreen(
                     onCollapse = { isExpandedInput = false },
                     onSend = {
                         if (inputText.isNotBlank()) {
-                            terminalSession.sendCommand(inputText)
+                            if (currentMode == SessionMode.CHAT) {
+                                ompAgentClient.sendPrompt(inputText)
+                            } else {
+                                terminalSession.sendCommand(inputText)
+                            }
                             inputText = ""
                             isExpandedInput = false
                         }
@@ -441,9 +473,14 @@ fun SessionScreen(
                         onInputFocused = {
                             // Focus in textfield
                         },
+                        isChatMode = currentMode == SessionMode.CHAT,
                         onSend = {
                             if (inputText.isNotBlank()) {
-                                terminalSession.sendCommand(inputText)
+                                if (currentMode == SessionMode.CHAT) {
+                                    ompAgentClient.sendPrompt(inputText)
+                                } else {
+                                    terminalSession.sendCommand(inputText)
+                                }
                                 inputText = ""
                             }
                         }
@@ -540,6 +577,8 @@ fun SessionTopBar(
     server: ServerConfig,
     activeSession: ServerSessionItem,
     connectionState: ConnectionState,
+    currentMode: SessionMode,
+    onModeSelected: (SessionMode) -> Unit,
     softWrap: Boolean,
     isDark: Boolean,
     onToggleSoftWrap: () -> Unit,
@@ -572,71 +611,38 @@ fun SessionTopBar(
                 )
             }
 
+            // 顶部模式切换滑块 (Chat / Work 切换)
+            ModeTogglePill(
+                currentMode = currentMode,
+                onModeSelected = onModeSelected,
+                modifier = Modifier.width(140.dp)
+            )
+
             Column(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .clickable(onClick = onTitleClick)
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "${server.name} · ${activeSession.title}",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = server.name,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        overflow = TextOverflow.Ellipsis
                     )
-
                     Icon(
                         imageVector = Icons.Rounded.KeyboardArrowDown,
                         contentDescription = "Switch Sessions",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
-
-                    val (dotColor, statusText) = when (connectionState) {
-                        is ConnectionState.Connected -> AccentGreen to "已连接"
-                        is ConnectionState.Connecting -> AccentOrange to "连接中"
-                        is ConnectionState.Disconnected -> MaterialTheme.colorScheme.onSurfaceVariant to "未连接"
-                        is ConnectionState.Error -> AccentRed to "错误"
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(dotColor.copy(alpha = 0.15f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(dotColor)
-                        )
-                        Text(
-                            text = statusText,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = dotColor
-                        )
-                    }
                 }
-
-                Text(
-                    text = "${server.username}@${server.host}",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
 
@@ -704,6 +710,7 @@ fun GoogleMessagesInputBar(
     onToggleTools: () -> Unit,
     onExpandInput: () -> Unit,
     onInputFocused: () -> Unit = {},
+    isChatMode: Boolean = false,
     onSend: () -> Unit
 ) {
     val plusRotation by animateFloatAsState(
@@ -778,7 +785,7 @@ fun GoogleMessagesInputBar(
                 ) {
                     if (text.isEmpty()) {
                         Text(
-                            text = "输入 Shell 命令...",
+                            text = if (isChatMode) "给 omp 发送需求或问题..." else "输入 Shell 命令...",
                             style = TextStyle(
                                 fontFamily = FontFamily.Default,
                                 fontSize = 14.5.sp,
