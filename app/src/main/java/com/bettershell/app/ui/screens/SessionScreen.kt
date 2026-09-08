@@ -796,20 +796,26 @@ fun SessionTopBar(
                     onClick = onTitleClick
                 )
             )
-            menuItems.add(
-                OpenAiMenuItemData(
-                    title = "日志",
-                    icon = LucideIcons.Code2,
-                    onClick = onViewLogs
+            // 日志：仅在 Work 模式下显示
+            if (currentMode == SessionMode.WORK) {
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "日志",
+                        icon = LucideIcons.Code2,
+                        onClick = onViewLogs
+                    )
                 )
-            )
-            menuItems.add(
-                OpenAiMenuItemData(
-                    title = if (softWrap) "禁用自动换行" else "启用自动换行",
-                    icon = LucideIcons.WrapText,
-                    onClick = onToggleSoftWrap
+            }
+            // 自动换行：仅在 Terminal 模式下显示
+            if (currentMode == SessionMode.TERMINAL) {
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = if (softWrap) "禁用自动换行" else "启用自动换行",
+                        icon = LucideIcons.WrapText,
+                        onClick = onToggleSoftWrap
+                    )
                 )
-            )
+            }
             if (connectionState is ConnectionState.Disconnected || connectionState is ConnectionState.Error) {
                 menuItems.add(
                     OpenAiMenuItemData(
@@ -820,13 +826,16 @@ fun SessionTopBar(
                     )
                 )
             }
-            menuItems.add(
-                OpenAiMenuItemData(
-                    title = "清空终端",
-                    icon = LucideIcons.Eraser,
-                    onClick = onClear
+            // 清空终端：仅在 Terminal 模式下显示
+            if (currentMode == SessionMode.TERMINAL) {
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "清空终端",
+                        icon = LucideIcons.Eraser,
+                        onClick = onClear
+                    )
                 )
-            )
+            }
             menuItems.add(
                 OpenAiMenuItemData(
                     title = "服务器设置",
