@@ -226,6 +226,7 @@ fun SessionScreen(
     var sessionToRename by remember { mutableStateOf<ServerSessionItem?>(null) }
     var showFontSizeIndicator by remember { mutableStateOf(false) }
     var indicatorDismissJob by remember { mutableStateOf<Job?>(null) }
+    var showSelectModelSheet by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val agentDiscoveryRepo = remember { AgentDiscoveryRepository(context) }
 
@@ -275,6 +276,7 @@ fun SessionScreen(
             showServerSettingsSheet ||
             showToolsSheet ||
             showSelectAgentSheet ||
+            showSelectModelSheet ||
             showThinkingLevelSheet ||
             isExpandedInput ||
             isImeVisible
@@ -287,6 +289,7 @@ fun SessionScreen(
             showServerSettingsSheet -> showServerSettingsSheet = false
             showToolsSheet -> showToolsSheet = false
             showSelectAgentSheet -> showSelectAgentSheet = false
+            showSelectModelSheet -> showSelectModelSheet = false
             showThinkingLevelSheet -> showThinkingLevelSheet = false
             isExpandedInput -> isExpandedInput = false
             isImeVisible -> {
@@ -494,6 +497,11 @@ fun SessionScreen(
                             keyboardController?.hide()
                             showSelectAgentSheet = true
                         },
+                        onOpenSelectModel = {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                            showSelectModelSheet = true
+                        },
                         onOpenSelectThinkingLevel = {
                             focusManager.clearFocus()
                             keyboardController?.hide()
@@ -613,6 +621,27 @@ fun SessionScreen(
                 agentDiscoveryRepo.saveSelectedAgentId(currentServer.id, newAgent.id)
             },
             onDismiss = { showSelectAgentSheet = false }
+        )
+    }
+
+    // 2. 独立模型切换弹窗
+    if (showSelectModelSheet && activeAgent != null) {
+        val currentModel = activeAgent?.selectedModel ?: "default"
+        com.bettershell.app.ui.components.SelectModelBottomSheet(
+            agent = activeAgent!!,
+            selectedModel = currentModel,
+            onSelectModel = { newModel ->
+                agentRunner.setModel(newModel)
+                val curId = activeAgent?.id
+                if (curId != null) {
+                    val updated = discoveredAgents.map {
+                        if (it.id == curId) it.copy(selectedModel = newModel) else it
+                    }
+                    discoveredAgents = updated
+                    agentDiscoveryRepo.saveAgents(currentServer.id, updated)
+                }
+            },
+            onDismiss = { showSelectModelSheet = false }
         )
     }
 

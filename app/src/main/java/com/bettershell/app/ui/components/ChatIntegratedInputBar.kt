@@ -63,6 +63,7 @@ fun ChatIntegratedInputBar(
     isAgentBusy: Boolean,
     isDark: Boolean,
     onOpenSelectAgent: () -> Unit,
+    onOpenSelectModel: () -> Unit,
     onOpenSelectThinkingLevel: () -> Unit,
     onSend: () -> Unit,
     modifier: Modifier = Modifier
@@ -167,6 +168,11 @@ fun ChatIntegratedInputBar(
                                     title = "选择 Agent",
                                     icon = LucideIcons.Bot,
                                     onClick = onOpenSelectAgent
+                                ),
+                                OpenAiMenuItemData(
+                                    title = "切换模型",
+                                    icon = LucideIcons.Asteroid,
+                                    onClick = onOpenSelectModel
                                 ),
                                 OpenAiMenuItemData(
                                     title = "思考程度",
