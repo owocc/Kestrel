@@ -40,6 +40,8 @@ sealed interface Screen {
     data object AppFontSettings : Screen
     data object AppAbout : Screen
     data object OpenSourceLicenses : Screen
+    data class LicenseDetail(val library: com.bettershell.app.data.OpenSourceLibraryDetail) : Screen
+    data object Acknowledgements : Screen
     data class ServerSettings(val server: ServerConfig, val fromSession: Boolean = false) : Screen
     data class ServerBasicSettings(val server: ServerConfig) : Screen
     data class ServerAgentSettings(val server: ServerConfig) : Screen
@@ -124,11 +126,24 @@ class MainActivity : ComponentActivity() {
                             is Screen.AppAbout -> {
                                 AppAboutScreen(
                                     onNavigateToLicenses = { pushScreen(Screen.OpenSourceLicenses) },
+                                    onNavigateToAcknowledgements = { pushScreen(Screen.Acknowledgements) },
                                     onBack = onBackAction
                                 )
                             }
                             is Screen.OpenSourceLicenses -> {
                                 com.bettershell.app.ui.screens.OpenSourceLicensesScreen(
+                                    onSelectLibrary = { lib -> pushScreen(Screen.LicenseDetail(lib)) },
+                                    onBack = onBackAction
+                                )
+                            }
+                            is Screen.LicenseDetail -> {
+                                com.bettershell.app.ui.screens.LicenseDetailScreen(
+                                    library = screen.library,
+                                    onBack = onBackAction
+                                )
+                            }
+                            is Screen.Acknowledgements -> {
+                                com.bettershell.app.ui.screens.AcknowledgementsScreen(
                                     onBack = onBackAction
                                 )
                             }

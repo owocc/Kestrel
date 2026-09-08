@@ -43,6 +43,7 @@ import com.bettershell.app.ui.theme.isAppInDarkTheme
 @Composable
 fun AppAboutScreen(
     onNavigateToLicenses: () -> Unit,
+    onNavigateToAcknowledgements: () -> Unit,
     onBack: () -> Unit
 ) {
     val isDark = isAppInDarkTheme
@@ -121,26 +122,27 @@ fun AppAboutScreen(
                     subtitle = "v${AppConstants.APP_VERSION} (Android 16 Ready)",
                     position = CardPosition.MIDDLE
                 )
-
-                OpenAiSettingRow(
-                    title = "核心引擎",
-                    subtitle = AppConstants.CORE_ENGINE_INFO,
-                    position = CardPosition.MIDDLE
-                )
-
                 OpenAiSettingRow(
                     title = "开源协议",
                     subtitle = AppConstants.OPEN_SOURCE_LICENSE,
                     position = CardPosition.MIDDLE
                 )
 
-                // 最后一个卡片：点击打开开源许可证与组件来源详情页
                 OpenAiSettingRow(
                     title = "开源许可证与组件来源",
                     subtitle = "查看项目使用到的所有开源类库、字体与矢量图标",
                     showChevron = true,
-                    position = CardPosition.BOTTOM,
+                    position = CardPosition.MIDDLE,
                     onClick = onNavigateToLicenses
+                )
+
+                // 最后一个卡片：特别致谢
+                OpenAiSettingRow(
+                    title = "特别致谢",
+                    subtitle = "感谢 Multica 为本项目提供的代码参考与架构启发",
+                    showChevron = true,
+                    position = CardPosition.BOTTOM,
+                    onClick = onNavigateToAcknowledgements
                 )
             }
 
