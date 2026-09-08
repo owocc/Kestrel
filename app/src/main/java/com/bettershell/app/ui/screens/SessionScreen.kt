@@ -8,11 +8,14 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +59,7 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.FontDownload
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.OpenInFull
@@ -96,6 +100,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -157,14 +162,12 @@ fun SessionScreen(
         AppThemeMode.LIGHT -> false
         AppThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
-
     val displayOutput = remember(rawAnnotatedOutput, isDark) {
         terminalSession.getAnnotatedOutput(isDark)
     }
 
     var inputText by remember { mutableStateOf("") }
     var isExpandedInput by remember { mutableStateOf(false) }
-    var showToolsDrawer by remember { mutableStateOf(false) }
     var showServerSettingsSheet by remember { mutableStateOf(false) }
     var showSessionSwitcherSheet by remember { mutableStateOf(false) }
     var sessionToRename by remember { mutableStateOf<ServerSessionItem?>(null) }
@@ -177,6 +180,22 @@ fun SessionScreen(
     val imeInsets = WindowInsets.ime
     val isKeyboardOpen by remember(imeInsets, density) {
         derivedStateOf { imeInsets.getBottom(density) > 0 }
+    }
+
+    val compactDrawerHeightDp = 240.dp
+    val maxDrawerHeightDp = 420.dp
+    val compactDrawerHeightPx = with(density) { compactDrawerHeightDp.toPx() }
+    val maxDrawerHeightPx = with(density) { maxDrawerHeightDp.toPx() }
+
+    val drawerAnimatable = remember { androidx.compose.animation.core.Animatable(0f) }
+    val currentDrawerHeightDp = with(density) { drawerAnimatable.value.toDp() }
+    val isDrawerOpen = drawerAnimatable.value > 10f
+
+    // Auto-hide tools drawer smoothly whenever soft keyboard appears
+    LaunchedEffect(isKeyboardOpen) {
+        if (isKeyboardOpen && drawerAnimatable.value > 0f) {
+            drawerAnimatable.animateTo(0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+        }
     }
 
     // Hierarchical back handling
@@ -194,8 +213,10 @@ fun SessionScreen(
             isExpandedInput -> {
                 isExpandedInput = false
             }
-            showToolsDrawer -> {
-                showToolsDrawer = false
+            isDrawerOpen -> {
+                coroutineScope.launch {
+                    drawerAnimatable.animateTo(0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                }
             }
             isKeyboardOpen -> {
                 focusManager.clearFocus()
@@ -366,9 +387,18 @@ fun SessionScreen(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
         ) {
-            if (isExpandedInput) {
-                // Expanded Input State (Image #5 / #6)
-                // Overlays ~55% of the screen while terminal remains visible in top half
+            // Expanded Input State (Image #5 / #6)
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isExpandedInput,
+                enter = androidx.compose.animation.slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                ) + fadeIn(),
+                exit = androidx.compose.animation.slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                ) + fadeOut()
+            ) {
                 ExpandedInputSheet(
                     text = inputText,
                     onTextChanged = { inputText = it },
@@ -382,7 +412,9 @@ fun SessionScreen(
                         }
                     }
                 )
-            } else {
+            }
+
+            if (!isExpandedInput) {
                 // Default State & Tool Drawer (Image #1, #2, #3, #4)
                 Column(
                     modifier = Modifier.fillMaxWidth()
@@ -397,9 +429,32 @@ fun SessionScreen(
                     GoogleMessagesInputBar(
                         text = inputText,
                         onTextChanged = { inputText = it },
-                        isToolsExpanded = showToolsDrawer,
-                        onToggleTools = { showToolsDrawer = !showToolsDrawer },
+                        isToolsExpanded = isDrawerOpen,
+                        onToggleTools = {
+                            coroutineScope.launch {
+                                if (drawerAnimatable.value < 10f) {
+                                    focusManager.clearFocus()
+                                    keyboardController?.hide()
+                                    drawerAnimatable.animateTo(
+                                        targetValue = compactDrawerHeightPx,
+                                        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                                    )
+                                } else {
+                                    drawerAnimatable.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                                    )
+                                }
+                            }
+                        },
                         onExpandInput = { isExpandedInput = true },
+                        onInputFocused = {
+                            if (drawerAnimatable.value > 0f) {
+                                coroutineScope.launch {
+                                    drawerAnimatable.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                                }
+                            }
+                        },
                         onSend = {
                             if (inputText.isNotBlank()) {
                                 terminalSession.sendCommand(inputText)
@@ -408,34 +463,73 @@ fun SessionScreen(
                         }
                     )
 
-                    // Tools Drawer (Image #2 / #3)
-                    AnimatedVisibility(
-                        visible = showToolsDrawer,
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        GoogleMessagesToolsDrawer(
-                            hasStartupScript = currentServer.startupScript.isNotBlank(),
-                            onRunStartupScript = {
-                                if (currentServer.startupScript.isNotBlank()) {
-                                    for (line in currentServer.startupScript.lines().filter { it.isNotBlank() && !it.startsWith("#") }) {
-                                        terminalSession.sendCommand(line)
+                    // Tools Drawer (height dynamically matches drawerAnimatable in 1:1 real time)
+                    if (currentDrawerHeightDp > 0.dp) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(currentDrawerHeightDp)
+                        ) {
+                            GoogleMessagesToolsDrawer(
+                                isFullyExpanded = drawerAnimatable.value > compactDrawerHeightPx + 20f,
+                                onDragDelta = { delta ->
+                                    coroutineScope.launch {
+                                        drawerAnimatable.snapTo(
+                                            (drawerAnimatable.value - delta).coerceIn(0f, maxDrawerHeightPx)
+                                        )
+                                    }
+                                },
+                                onDragEnd = {
+                                    val current = drawerAnimatable.value
+                                    val target = when {
+                                        current > (compactDrawerHeightPx + maxDrawerHeightPx) / 2f -> maxDrawerHeightPx
+                                        current > compactDrawerHeightPx / 2f -> compactDrawerHeightPx
+                                        else -> 0f
+                                    }
+                                    coroutineScope.launch {
+                                        drawerAnimatable.animateTo(
+                                            targetValue = target,
+                                            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                                        )
+                                    }
+                                },
+                                onToggleExpand = {
+                                    val target = if (drawerAnimatable.value > compactDrawerHeightPx + 20f) compactDrawerHeightPx else maxDrawerHeightPx
+                                    coroutineScope.launch {
+                                        drawerAnimatable.animateTo(
+                                            targetValue = target,
+                                            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                                        )
+                                    }
+                                },
+                                hasStartupScript = currentServer.startupScript.isNotBlank(),
+                                onRunStartupScript = {
+                                    if (currentServer.startupScript.isNotBlank()) {
+                                        for (line in currentServer.startupScript.lines().filter { it.isNotBlank() && !it.startsWith("#") }) {
+                                            terminalSession.sendCommand(line)
+                                        }
+                                    }
+                                    coroutineScope.launch {
+                                        drawerAnimatable.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                                    }
+                                },
+                                onInsertCommand = { cmd ->
+                                    inputText = cmd
+                                    coroutineScope.launch {
+                                        drawerAnimatable.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                                    }
+                                },
+                                onInsertSymbol = { sym ->
+                                    inputText += sym
+                                },
+                                onClearTerminal = {
+                                    terminalSession.clearScreen()
+                                    coroutineScope.launch {
+                                        drawerAnimatable.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
                                     }
                                 }
-                                showToolsDrawer = false
-                            },
-                            onInsertCommand = { cmd ->
-                                inputText = cmd
-                                showToolsDrawer = false
-                            },
-                            onInsertSymbol = { sym ->
-                                inputText += sym
-                            },
-                            onClearTerminal = {
-                                terminalSession.clearScreen()
-                                showToolsDrawer = false
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
@@ -666,6 +760,7 @@ fun GoogleMessagesInputBar(
     isToolsExpanded: Boolean,
     onToggleTools: () -> Unit,
     onExpandInput: () -> Unit,
+    onInputFocused: () -> Unit = {},
     onSend: () -> Unit
 ) {
     Row(
@@ -701,6 +796,7 @@ fun GoogleMessagesInputBar(
                 .clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp))
+                .clickable { onInputFocused() }
                 .padding(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
             contentAlignment = Alignment.CenterStart
         ) {
@@ -727,7 +823,13 @@ fun GoogleMessagesInputBar(
                     BasicTextField(
                         value = text,
                         onValueChange = onTextChanged,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged {
+                                if (it.isFocused) {
+                                    onInputFocused()
+                                }
+                            },
                         textStyle = TextStyle(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 14.sp,
@@ -923,6 +1025,10 @@ fun ExpandedInputSheet(
  */
 @Composable
 fun GoogleMessagesToolsDrawer(
+    isFullyExpanded: Boolean,
+    onDragDelta: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onToggleExpand: () -> Unit,
     hasStartupScript: Boolean,
     onRunStartupScript: () -> Unit,
     onInsertCommand: (String) -> Unit,
@@ -931,87 +1037,203 @@ fun GoogleMessagesToolsDrawer(
 ) {
     Surface(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .fillMaxSize()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         shadowElevation = 0.dp
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Row 1
+            // Fixed Arrow / drag handle at top (Tapping or dragging toggles full expansion)
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures(
+                            onVerticalDrag = { _, dragAmount ->
+                                onDragDelta(dragAmount)
+                            },
+                            onDragEnd = {
+                                onDragEnd()
+                            }
+                        )
+                    }
+                    .clickable(onClick = onToggleExpand)
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                ToolGridItem(
-                    icon = Icons.Rounded.Code,
-                    label = "启动脚本",
-                    highlight = hasStartupScript,
-                    onClick = onRunStartupScript
-                )
-                ToolGridItem(
-                    icon = Icons.Rounded.SmartToy,
-                    label = "Agent 状态",
-                    onClick = { onInsertCommand("agent --status") }
-                )
-                ToolGridItem(
-                    icon = Icons.Rounded.Code,
-                    label = "Git 状态",
-                    onClick = { onInsertCommand("git status") }
+                Icon(
+                    imageVector = if (isFullyExpanded) Icons.Rounded.KeyboardArrowDown else Icons.Rounded.KeyboardArrowUp,
+                    contentDescription = if (isFullyExpanded) "收起部分工具" else "展开更多工具",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
                 )
             }
 
-            // Row 2
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround
+            // Scrollable Content Column
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
-                ToolGridItem(
-                    icon = Icons.Rounded.Terminal,
-                    label = "文件列表",
-                    onClick = { onInsertCommand("ls -la") }
-                )
-                ToolGridItem(
-                    icon = Icons.Rounded.Memory,
-                    label = "进程监控",
-                    onClick = { onInsertCommand("top") }
-                )
-                ToolGridItem(
-                    icon = Icons.Rounded.Terminal,
-                    label = "Python",
-                    onClick = { onInsertCommand("python3 agent.py") }
-                )
+
+            // 3x3 Essential Tool Grid
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Row 1
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    ToolGridItem(
+                        icon = Icons.Rounded.Code,
+                        label = "启动脚本",
+                        highlight = hasStartupScript,
+                        onClick = onRunStartupScript
+                    )
+                    ToolGridItem(
+                        icon = Icons.Rounded.SmartToy,
+                        label = "Agent 状态",
+                        onClick = { onInsertCommand("agent --status") }
+                    )
+                    ToolGridItem(
+                        icon = Icons.Rounded.Code,
+                        label = "Git 状态",
+                        onClick = { onInsertCommand("git status") }
+                    )
+                }
+
+                // Row 2
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    ToolGridItem(
+                        icon = Icons.Rounded.Terminal,
+                        label = "文件列表",
+                        onClick = { onInsertCommand("ls -la") }
+                    )
+                    ToolGridItem(
+                        icon = Icons.Rounded.Memory,
+                        label = "进程监控",
+                        onClick = { onInsertCommand("top") }
+                    )
+                    ToolGridItem(
+                        icon = Icons.Rounded.Terminal,
+                        label = "Python",
+                        onClick = { onInsertCommand("python3 agent.py") }
+                    )
+                }
+
+                // Row 3
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    ToolGridItem(
+                        icon = Icons.Rounded.Code,
+                        label = "管道符 |",
+                        onClick = { onInsertSymbol(" | ") }
+                    )
+                    ToolGridItem(
+                        icon = Icons.Rounded.Folder,
+                        label = "主目录 ~/",
+                        onClick = { onInsertSymbol("~/") }
+                    )
+                    ToolGridItem(
+                        icon = Icons.Rounded.DeleteSweep,
+                        label = "清空终端",
+                        onClick = onClearTerminal
+                    )
+                }
             }
 
-            // Row 3
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                ToolGridItem(
-                    icon = Icons.Rounded.Code,
-                    label = "管道符 |",
-                    onClick = { onInsertSymbol(" | ") }
+            // Extended tools section visible when isFullyExpanded
+            if (isFullyExpanded) {
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = "常用 CLI 指令与快捷符号:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                ToolGridItem(
-                    icon = Icons.Rounded.Folder,
-                    label = "主目录 ~/",
-                    onClick = { onInsertSymbol("~/") }
-                )
-                ToolGridItem(
-                    icon = Icons.Rounded.DeleteSweep,
-                    label = "清空终端",
-                    onClick = onClearTerminal
-                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Extended command chips
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf("git diff", "git log -n 5", "docker ps", "curl -I", "free -h", "netstat -tlpn").forEach { cmd ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                                .clickable { onInsertCommand(cmd) }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = cmd,
+                                style = TextStyle(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Extended symbol chips
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf("&&", "||", ">", ">>", "2>&1", "sudo", "grep", "tail -f", "awk", "find", "exit").forEach { sym ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                                .clickable { onInsertSymbol(" $sym ") }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = sym,
+                                style = TextStyle(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             }
         }
     }
 }
-
 @Composable
 fun ToolGridItem(
     icon: ImageVector,
