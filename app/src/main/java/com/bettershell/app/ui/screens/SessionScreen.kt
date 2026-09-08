@@ -715,19 +715,15 @@ fun SessionTopBar(
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 8.dp)
     ) {
-        // 1. 左侧：极简只留一个返回按钮
+        // 1. 左侧：统一使用规范的 StandardBackButton
         Box(
-            modifier = Modifier.align(Alignment.CenterStart)
+            modifier = Modifier.align(Alignment.CenterStart).padding(start = 6.dp)
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
+            com.bettershell.app.ui.components.StandardBackButton(
+                onBack = onBack,
+                isDark = isDark
+            )
         }
-
         // 2. 中间：双胶囊切换滑块（Chat / Shell 模式），绝对居中！
         Box(
             modifier = Modifier.align(Alignment.Center)

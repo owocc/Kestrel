@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -15,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -39,11 +39,12 @@ data class OpenAiMenuItemData(
 )
 
 /**
- * 完整对齐 OpenAI / ChatGPT 规范的大圆角高立体感浮层菜单 (Large Shadow & Clean Lucide Icons):
- * - 超大立体柔和阴影 (16dp shadowElevation + 细微半透明边界)
- * - 24dp 圆润圆角 (RoundedCornerShape(24.dp))
- * - 彻底去除图标背景底衬，纯净展示原生 Lucide 线条图标
- * - 菜单文字排版紧凑优雅
+ * 全局统一的 OpenAI 风格高立体感浮层菜单 (Unified OpenAI Dropdown Menu)
+ * - 阴影：扩大的柔和 15dp 扩散投影 (elevation = 15.dp, alpha = 0.1f)
+ * - 圆角：24dp
+ * - 全自动深色/浅色自适应：深色模式背景采用 Color(0xFF1E1E1E)，浅色采用 Color(0xFFFFFFFF)
+ * - 边框：半透明极细高品质微光描边
+ * - 纯净线条图标，无背景方框，间距对齐
  */
 @Composable
 fun OpenAiDropdownMenu(
@@ -51,9 +52,9 @@ fun OpenAiDropdownMenu(
     onDismissRequest: () -> Unit,
     items: List<OpenAiMenuItemData>,
     modifier: Modifier = Modifier,
-    isDark: Boolean = false,
+    isDark: Boolean = MaterialTheme.colorScheme.background.red < 0.5f,
     offset: DpOffset = DpOffset(0.dp, 0.dp),
-    width: Dp = 200.dp
+    width: Dp = 210.dp
 ) {
     val menuBg = if (isDark) Color(0xFF1E1E1E) else Color(0xFFFFFFFF)
     val borderColor = if (isDark) Color(0xFF333333) else Color(0xFFE5E7EB)
@@ -68,13 +69,13 @@ fun OpenAiDropdownMenu(
             modifier = modifier
                 .width(width)
                 .shadow(
-                    elevation = 16.dp,
+                    elevation = 15.dp,
                     shape = RoundedCornerShape(24.dp),
-                    spotColor = Color.Black.copy(alpha = if (isDark) 0.65f else 0.18f),
-                    ambientColor = Color.Black.copy(alpha = if (isDark) 0.5f else 0.12f)
+                    spotColor = Color.Black.copy(alpha = if (isDark) 0.35f else 0.10f),
+                    ambientColor = Color.Black.copy(alpha = if (isDark) 0.25f else 0.08f)
                 )
                 .background(menuBg)
-                .border(1.dp, borderColor.copy(alpha = 0.55f), RoundedCornerShape(24.dp))
+                .border(1.dp, borderColor.copy(alpha = if (isDark) 0.5f else 0.7f), RoundedCornerShape(24.dp))
                 .padding(vertical = 8.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -103,7 +104,7 @@ fun OpenAiDropdownMenuItemRow(
     modifier: Modifier = Modifier,
     iconTint: Color? = null,
     isDestructive: Boolean = false,
-    isDark: Boolean = false,
+    isDark: Boolean = MaterialTheme.colorScheme.background.red < 0.5f,
     onClick: () -> Unit
 ) {
     val defaultIconColor = if (isDark) Color(0xFFE5E7EB) else Color(0xFF262626)
@@ -114,32 +115,38 @@ fun OpenAiDropdownMenuItemRow(
     }
     val textColor = when {
         isDestructive -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.onSurface
+        else -> if (isDark) Color(0xFFF3F4F6) else Color(0xFF1F2937)
     }
 
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
-        // 无底衬、纯粹原生 Lucide 图标 (对齐需求: 内部的图标全部去除背景)
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = actualIconTint,
-            modifier = Modifier.size(20.dp)
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = actualIconTint,
+                modifier = Modifier.size(19.dp)
+            )
 
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium.copy(
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Text(
+                text = title,
                 fontSize = 15.sp,
-                fontWeight = FontWeight.Normal
-            ),
-            color = textColor
-        )
+                fontWeight = FontWeight.Medium,
+                color = textColor,
+                maxLines = 1
+            )
+        }
     }
 }
