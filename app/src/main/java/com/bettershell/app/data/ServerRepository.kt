@@ -63,6 +63,7 @@ class ServerRepository(private val context: Context) {
                 port = 22,
                 username = "agent",
                 authType = AuthType.DEMO_MOCK,
+                description = "本地安全沙箱模拟环境，用于探索 Coding Agent",
                 isMock = true,
                 startupScript = "echo \"Starting AI Agent Runtime...\"\nsource /opt/agent/env.sh\nagent --status",
                 lastConnected = System.currentTimeMillis()
@@ -74,7 +75,7 @@ class ServerRepository(private val context: Context) {
                 port = 22,
                 username = "ubuntu",
                 authType = AuthType.PASSWORD,
-                startupScript = "# Auto run on connect\ncd ~/agent-workspace\npython3 main.py --mode=interactive"
+                description = "高性能云端工作站，运行模型推理与后台编译"
             )
         )
     }

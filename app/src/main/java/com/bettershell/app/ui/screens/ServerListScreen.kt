@@ -99,14 +99,11 @@ fun ServerListScreen(
     var searchQuery by remember { mutableStateOf("") }
 
     val scope = rememberCoroutineScope()
-
-    // 搜索过滤
     val filteredServers = remember(servers, searchQuery) {
         if (searchQuery.isBlank()) servers
         else servers.filter {
             it.name.contains(searchQuery, ignoreCase = true) ||
-            it.host.contains(searchQuery, ignoreCase = true) ||
-            it.username.contains(searchQuery, ignoreCase = true)
+            it.description.contains(searchQuery, ignoreCase = true)
         }
     }
 
@@ -198,7 +195,7 @@ fun ServerListScreen(
                     ) {
                         if (searchQuery.isEmpty()) {
                             Text(
-                                text = "搜索服务器名称、IP 或用户名...",
+                                text = "搜索服务器名称或描述...",
                                 style = TextStyle(
                                     fontFamily = FontFamily.Default,
                                     fontSize = 14.5.sp,
@@ -428,9 +425,10 @@ fun ServerCard(
 
                     Spacer(modifier = Modifier.height(3.dp))
 
+                    val descText = server.description.ifBlank { "远程连接主机" }
                     Text(
-                        text = "${server.username}@${server.host}:${server.port}",
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        text = descText,
+                        style = MaterialTheme.typography.bodySmall,
                         color = subtitleColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -588,9 +586,10 @@ fun ServerGridCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
+                val descText = server.description.ifBlank { "远程连接主机" }
                 Text(
-                    text = "${server.username}@${server.host}",
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    text = descText,
+                    style = MaterialTheme.typography.bodySmall,
                     color = subtitleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

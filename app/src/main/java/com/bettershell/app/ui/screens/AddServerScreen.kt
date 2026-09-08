@@ -61,6 +61,7 @@ fun AddServerScreen(
     onBack: () -> Unit
 ) {
     var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
     var host by remember { mutableStateOf("") }
     var portText by remember { mutableStateOf("22") }
     var username by remember { mutableStateOf("root") }
@@ -69,7 +70,6 @@ fun AddServerScreen(
     var privateKey by remember { mutableStateOf("") }
     var startupScript by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
-
     val isDark = isAppInDarkTheme
     val isFormValid = host.isNotBlank() && username.isNotBlank()
 
@@ -85,6 +85,7 @@ fun AddServerScreen(
             authType = authType,
             password = password,
             privateKey = privateKey.trim(),
+            description = description.trim(),
             startupScript = startupScript.trim()
         )
         onSave(server)
@@ -149,6 +150,16 @@ fun AddServerScreen(
                             placeholder = { Text("例如: AI Agent 节点 / 生产集群") },
                             singleLine = true,
                             shape = CircleShape, // 全圆角
+                            colors = textFieldColors,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = description,
+                            onValueChange = { description = it },
+                            label = { Text("用途描述 (展示在列表卡片，选填)") },
+                            placeholder = { Text("例如: 模型微调工作站，隐私保护") },
+                            singleLine = true,
+                            shape = CircleShape,
                             colors = textFieldColors,
                             modifier = Modifier.fillMaxWidth()
                         )

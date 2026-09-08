@@ -59,6 +59,7 @@ fun ServerBasicSettingsScreen(
     val isDark = com.bettershell.app.ui.theme.isAppInDarkTheme
 
     var name by remember { mutableStateOf(server.name) }
+    var description by remember { mutableStateOf(server.description) }
     var host by remember { mutableStateOf(server.host) }
     var portText by remember { mutableStateOf(server.port.toString()) }
     var username by remember { mutableStateOf(server.username) }
@@ -72,6 +73,7 @@ fun ServerBasicSettingsScreen(
         val p = portText.toIntOrNull() ?: 22
         val updated = server.copy(
             name = name.ifBlank { "Server" },
+            description = description.trim(),
             host = host.trim(),
             port = p,
             username = username.trim().ifBlank { "root" },
@@ -117,6 +119,15 @@ fun ServerBasicSettingsScreen(
                         value = name,
                         onValueChange = { name = it },
                         label = { Text("服务器名称") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("用途描述 (展示在卡片，隐私友好)") },
+                        placeholder = { Text("例如: 模型推理工作站") },
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
