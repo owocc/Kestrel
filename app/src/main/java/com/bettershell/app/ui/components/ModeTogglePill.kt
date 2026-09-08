@@ -35,8 +35,8 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 enum class SessionMode(val title: String) {
-    CHAT("Chat"),
-    SHELL("Shell")
+    WORK("Work"),
+    TERMINAL("Terminal")
 }
 
 /**

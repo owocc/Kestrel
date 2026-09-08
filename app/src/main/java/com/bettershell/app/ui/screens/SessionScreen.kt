@@ -212,7 +212,7 @@ fun SessionScreen(
     val chatRawOutput by chatTerminalSession.annotatedOutput.collectAsState()
     val chatConnectionState by chatTerminalSession.connectionState.collectAsState()
 
-    var currentMode by remember { mutableStateOf(SessionMode.SHELL) }
+    var currentMode by remember { mutableStateOf(SessionMode.WORK) }
     var inputText by remember { mutableStateOf("") }
     var isExpandedInput by remember { mutableStateOf(false) }
     var showServerSettingsSheet by remember { mutableStateOf(false) }
@@ -303,7 +303,7 @@ fun SessionScreen(
             SessionTopBar(
                 server = currentServer,
                 activeSession = activeSessionItem,
-                connectionState = if (currentMode == SessionMode.CHAT) chatConnectionState else shellConnectionState,
+                connectionState = if (currentMode == SessionMode.WORK) chatConnectionState else shellConnectionState,
                 currentMode = currentMode,
                 onModeSelected = { currentMode = it },
                 softWrap = terminalPrefs.softWrap,
@@ -321,11 +321,11 @@ fun SessionScreen(
                 onTitleClick = { showSessionSwitcherSheet = true },
                 onViewLogs = { showAgentLogsSheet = true },
                 onReconnect = {
-                    if (currentMode == SessionMode.CHAT) chatTerminalSession.connect()
+                    if (currentMode == SessionMode.WORK) chatTerminalSession.connect()
                     else shellTerminalSession.connect()
                 },
                 onClear = {
-                    if (currentMode == SessionMode.CHAT) {
+                    if (currentMode == SessionMode.WORK) {
                         chatTerminalSession.clearScreen()
                     } else {
                         shellTerminalSession.clearScreen()
@@ -334,7 +334,7 @@ fun SessionScreen(
                 onOpenSettings = { onOpenServerSettings() }
             )
             // Content Area: Switch between Agent Chat View and Interactive Terminal View
-            if (currentMode == SessionMode.CHAT) {
+            if (currentMode == SessionMode.WORK) {
                 AgentChatView(
                     messages = chatMessages,
                     isAgentBusy = isAgentBusy,
@@ -465,7 +465,7 @@ fun SessionScreen(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
         ) {
-            if (currentMode == SessionMode.CHAT) {
+            if (currentMode == SessionMode.WORK) {
                 // Chat 专属独立输入体系 (融合胶囊风格，对齐用户提供的 ChatGPT 截图)
                 Column(
                     modifier = Modifier
@@ -736,15 +736,26 @@ fun SessionTopBar(
             )
         }
 
-        // 3. 右侧：只留一个 Lucide 风格 Ellipsis 更多按钮，展开精简下拉菜单
+        // 3. 右侧：和返回按钮一样设置规范的 40dp 圆形背景与衬底，内嵌 Lucide Ellipsis 更多按钮
         Box(
-            modifier = Modifier.align(Alignment.CenterEnd)
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 6.dp)
         ) {
-            IconButton(onClick = { showMoreMenu = true }) {
-                LucideEllipsis(
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    size = 22.dp
-                )
+            val moreButtonBg = if (isDark) Color(0xFF1E1E1E) else Color(0xFFF3F4F6)
+            val moreIconTint = if (isDark) Color(0xFFE5E7EB) else Color(0xFF1F2937)
+            Surface(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .clickable { showMoreMenu = true },
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = moreButtonBg
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    LucideEllipsis(
+                        tint = moreIconTint,
+                        size = 20.dp
+                    )
+                }
             }
             val menuItems = mutableListOf<OpenAiMenuItemData>()
             menuItems.add(
