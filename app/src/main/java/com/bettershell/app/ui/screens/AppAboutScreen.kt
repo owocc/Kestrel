@@ -42,6 +42,7 @@ import com.bettershell.app.ui.theme.isAppInDarkTheme
  */
 @Composable
 fun AppAboutScreen(
+    onNavigateToLicenses: () -> Unit,
     onBack: () -> Unit
 ) {
     val isDark = isAppInDarkTheme
@@ -127,11 +128,19 @@ fun AppAboutScreen(
                     position = CardPosition.MIDDLE
                 )
 
-                // 最后一个卡片：顶部小圆角，底部大圆角
                 OpenAiSettingRow(
                     title = "开源协议",
                     subtitle = AppConstants.OPEN_SOURCE_LICENSE,
-                    position = CardPosition.BOTTOM
+                    position = CardPosition.MIDDLE
+                )
+
+                // 最后一个卡片：点击打开开源许可证与组件来源详情页
+                OpenAiSettingRow(
+                    title = "开源许可证与组件来源",
+                    subtitle = "查看项目使用到的所有开源类库、字体与矢量图标",
+                    showChevron = true,
+                    position = CardPosition.BOTTOM,
+                    onClick = onNavigateToLicenses
                 )
             }
 

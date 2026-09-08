@@ -39,6 +39,7 @@ sealed interface Screen {
     data object AppSettings : Screen
     data object AppFontSettings : Screen
     data object AppAbout : Screen
+    data object OpenSourceLicenses : Screen
     data class ServerSettings(val server: ServerConfig, val fromSession: Boolean = false) : Screen
     data class ServerBasicSettings(val server: ServerConfig) : Screen
     data class ServerAgentSettings(val server: ServerConfig) : Screen
@@ -122,6 +123,12 @@ class MainActivity : ComponentActivity() {
                             }
                             is Screen.AppAbout -> {
                                 AppAboutScreen(
+                                    onNavigateToLicenses = { pushScreen(Screen.OpenSourceLicenses) },
+                                    onBack = onBackAction
+                                )
+                            }
+                            is Screen.OpenSourceLicenses -> {
+                                com.bettershell.app.ui.screens.OpenSourceLicensesScreen(
                                     onBack = onBackAction
                                 )
                             }
