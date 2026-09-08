@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>专为 Android 16 与移动端打造的极简现代 AI Coding Agent 远程终端与工作流平台</strong>
+  <strong>专为 AI 编程与个人 Agent 办公打造的极简移动远程终端</strong>
 </p>
 
 <p align="center">
@@ -19,9 +19,9 @@
 
 ## 🌟 什么是 Kestrel？
 
-**Kestrel**（红隼）是一款轻盈、敏锐且极具现代设计审美的 Android 移动端远程 AI 编程终端。
+**Kestrel**（红隼）是一款专为 **AI 编程** 与 **个人 Agent 办公** 深度开发的现代移动远程终端。
 
-不同于传统粗糙笨重的 SSH 移动工具，Kestrel 融合了 **OpenAI / ChatGPT 极简交互美学** 与 **Multica 先进的多 Agent 结构化工作流规范**。它专为在手机上无缝指挥远程服务器中的 Coding Agent（如 `omp`、`Claude Code`、`Codex`、`Aider` 等）而生，同时保留了完整强大的交互式 VT100 / ANSI 原生终端能力。
+不同于传统粗糙笨重的 SSH 移动工具，Kestrel 深度融合了 **OpenAI / ChatGPT 极简交互美学** 与 **先进的多 Agent 结构化工作流规范**。它专为在移动设备上无缝调度、掌控远程服务器中的各类 Coding Agent（如 `omp`、`Claude Code`、`Codex`、`Aider` 等）与日常个人自动化工作流而生，同时保留了完整强大的交互式 VT100 / ANSI 原生终端能力。
 
 ---
 
@@ -55,10 +55,10 @@
 - **结构化模式**：一行一个事件卡片，包含精确时间戳、彩色状态类型小胶囊与可折叠的 JSON/调用参数。
 - **纯文本模式**：深色 Monospace 终端文本框，支持横向 + 纵向平滑滚动及长按自由划词。
 
-### 5. 🎯 Android 16 极致手势支持
-- **全屏预测式返回（Predictive Back）**：
+### 5. 🎯 现代手势流与沉浸式体验
+- **全屏预测式返回手势（Predictive Back）**：
   - 基于 `SeekableTransitionState` 构建的全屏单 Activity 纯 Compose 导航栈（`screenStack`）。
-  - 支持系统边缘右滑返回手势实时跟随手指进度缩放与预览上一级页面，杜绝闪烁。
+  - 支持边缘右滑返回手势实时跟随手指进度缩放与预览上一级页面，如丝般顺滑。
 - **纯粹黑白高对比度主题**：
   - 纯黑（`#000000`）与纯白（`#F8F9FB`）底色，搭配与顶栏滑块严格一致的高级中灰强调色（`#424242` / `#FFFFFF`）。
 
