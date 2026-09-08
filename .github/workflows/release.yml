@@ -1,0 +1,75 @@
+name: Build & Release App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Android Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release and Debug APK
+        run: ./gradlew assembleRelease assembleDebug --stacktrace
+
+      - name: Prepare Release Artifacts
+        id: prepare_artifacts
+        run: |
+          mkdir -p release_output
+          TAG_NAME="${GITHUB_REF_NAME:-v1.0.0}"
+          
+          # Find output apks
+          if [ -f "app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+            cp "app/build/outputs/apk/release/app-release-unsigned.apk" "release_output/Kestrel-${TAG_NAME}-release-unsigned.apk"
+          fi
+          if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+            cp "app/build/outputs/apk/release/app-release.apk" "release_output/Kestrel-${TAG_NAME}-release.apk"
+          fi
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp "app/build/outputs/apk/debug/app-debug.apk" "release_output/Kestrel-${TAG_NAME}-debug.apk"
+          fi
+
+          echo "Prepared artifacts:"
+          ls -lh release_output/
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kestrel-APKs
+          path: release_output/*
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Kestrel ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          generate_release_notes: true
+          files: release_output/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
