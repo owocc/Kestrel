@@ -67,6 +67,10 @@ data class OpenAiMenuItemData(
 
 /**
  * Android 原生 Flip 弹出动画 & 真实系统窗口级 OnBackAnimationCallback 预见式手势收起菜单
+ * 严格互锁与状态隔离：
+ * 1. 【手势返回后绝不二次播放返回动画】：手势在物理上已经缩回，提交时直接落地销毁，杜绝再次触发 dismiss 动画；
+ * 2. 【手势取消后绝不重新播放弹出动画】：手势放弃时，在当前手势通道内弹簧平滑吸附回 0f，绝不重新重绘或触发展开动画；
+ * 3. 【出入同源 Flip】：从右上角 (1f, 0f) 锚点弹出和缩回。
  */
 @Composable
 fun OpenAiDropdownMenu(
@@ -83,14 +87,15 @@ fun OpenAiDropdownMenu(
     val animAlpha = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
-    // 捕获宿主窗口的 Dispatcher Owner，透传到 Popup 内部
     val parentDispatcherOwner = LocalOnBackPressedDispatcherOwner.current
 
-    // 预见式手势实时进度
-    var gestureFraction by remember { mutableFloatStateOf(0f) }
+    // 预见式手势进度与活跃标志
+    val gestureProgress = remember { Animatable(0f) }
     var isGestureTracking by remember { mutableStateOf(false) }
 
+    // 普通编程式关闭（点击外部或点击选项）
     fun dismissWithAnimation() {
+        if (isGestureTracking) return
         scope.launch {
             animScale.animateTo(
                 targetValue = 0.75f,
@@ -109,27 +114,27 @@ fun OpenAiDropdownMenu(
 
     LaunchedEffect(expanded) {
         if (expanded) {
-            isVisible = true
-            gestureFraction = 0f
-            isGestureTracking = false
-            animScale.snapTo(0.75f)
-            animAlpha.snapTo(0f)
-            scope.launch {
-                animScale.animateTo(
-                    targetValue = 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
+            if (!isVisible) {
+                isVisible = true
+                animScale.snapTo(0.75f)
+                animAlpha.snapTo(0f)
+                scope.launch {
+                    animScale.animateTo(
+                        targetValue = 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
                     )
-                )
+                }
+                scope.launch {
+                    animAlpha.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(durationMillis = 150)
+                    )
+                }
             }
-            scope.launch {
-                animAlpha.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(durationMillis = 150)
-                )
-            }
-        } else if (isVisible) {
+        } else if (isVisible && !isGestureTracking) {
             dismissWithAnimation()
         }
     }
@@ -145,40 +150,53 @@ fun OpenAiDropdownMenu(
         onDismissRequest = { dismissWithAnimation() },
         properties = PopupProperties(
             focusable = true,
-            dismissOnBackPress = false, // 由底层的系统级回调精准接管并执行动画
+            dismissOnBackPress = false,
             dismissOnClickOutside = true
         )
     ) {
         val popupView = LocalView.current
 
-        // 核心技术突破：在 Popup 真实的 Android Window 级别直接注册 OnBackAnimationCallback！
-        // 从而直接由系统 Framework 将侧滑手势逐帧派发到这里，绝对支持原生预测性返回！
+        // 核心：在独立窗口直接接入 Android 14/15/16 原生 OnBackAnimationCallback
         DisposableEffect(popupView) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 val dispatcher = popupView.findOnBackInvokedDispatcher()
                 val callback = object : OnBackAnimationCallback {
                     override fun onBackStarted(backEvent: BackEvent) {
                         isGestureTracking = true
-                        gestureFraction = FastOutSlowInEasing.transform(backEvent.progress)
+                        val eased = FastOutSlowInEasing.transform(backEvent.progress)
+                        scope.launch { gestureProgress.snapTo(eased) }
                     }
 
                     override fun onBackProgressed(backEvent: BackEvent) {
-                        gestureFraction = FastOutSlowInEasing.transform(backEvent.progress)
+                        val eased = FastOutSlowInEasing.transform(backEvent.progress)
+                        scope.launch { gestureProgress.snapTo(eased) }
                     }
 
                     override fun onBackInvoked() {
-                        // 手势确认提交：缩回并关闭
-                        isGestureTracking = false
-                        dismissWithAnimation()
+                        // 核心防二次重播：手势确认退出时，在手势通道内顺势完成缩小到 1.0f，然后直接静默销毁！
+                        // 绝对不调用 dismissWithAnimation()！杜绝二次播放返回动画！
+                        scope.launch {
+                            gestureProgress.animateTo(
+                                targetValue = 1f,
+                                animationSpec = tween(durationMillis = 100, easing = FastOutSlowInEasing)
+                            )
+                            isGestureTracking = false
+                            isVisible = false
+                            onDismissRequest()
+                        }
                     }
 
                     override fun onBackCancelled() {
-                        // 手势放弃：复位展开
+                        // 核心防二次弹出：手势放弃时，在当前手势通道内平滑弹簧复位到 0f，
+                        // 绝不触碰 animScale/animAlpha，绝对不重新播放弹出动画！
                         scope.launch {
-                            val anim = Animatable(gestureFraction)
-                            anim.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) {
-                                gestureFraction = value
-                            }
+                            gestureProgress.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow
+                                )
+                            )
                             isGestureTracking = false
                         }
                     }
@@ -197,7 +215,7 @@ fun OpenAiDropdownMenu(
             }
         }
 
-        // 针对低于 Android 14 或 fallback 的兼容保证
+        // 低版本兼顾
         if (parentDispatcherOwner != null) {
             CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides parentDispatcherOwner) {
                 androidx.activity.compose.BackHandler(enabled = isVisible && !isGestureTracking) {
@@ -206,14 +224,14 @@ fun OpenAiDropdownMenu(
             }
         }
 
-        val effectiveScale = if (isGestureTracking) {
-            (1f - gestureFraction * 0.40f).coerceIn(0.60f, 1f)
+        val effectiveScale = if (isGestureTracking || gestureProgress.value > 0f) {
+            (1f - (gestureProgress.value * 0.40f)).coerceIn(0.60f, 1f)
         } else {
             animScale.value
         }
 
-        val effectiveAlpha = if (isGestureTracking) {
-            (1f - gestureFraction * 0.85f).coerceIn(0f, 1f)
+        val effectiveAlpha = if (isGestureTracking || gestureProgress.value > 0f) {
+            (1f - (gestureProgress.value * 0.90f)).coerceIn(0f, 1f)
         } else {
             animAlpha.value
         }
@@ -222,8 +240,7 @@ fun OpenAiDropdownMenu(
             modifier = modifier
                 .width(width)
                 .graphicsLayer {
-                    // Android 原生 Flip 核心：将折叠缩放锚点固定在右上角 (1f, 0f)
-                    // “从哪里出来就从哪里缩放回去”！
+                    // Android 原生 Flip 核心：以右上角 (1f, 0f) 为锚点
                     transformOrigin = TransformOrigin(pivotFractionX = 1f, pivotFractionY = 0f)
                     scaleX = effectiveScale
                     scaleY = effectiveScale
