@@ -6,60 +6,100 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 
-data class TerminalSpan(
-    val text: String,
-    val color: Color,
-    val isBold: Boolean = false
+data class TerminalCell(
+    var char: Char = ' ',
+    var fg: Color = TerminalColors.DEFAULT_TEXT_COLOR,
+    var bg: Color = Color.Transparent,
+    var isBold: Boolean = false
 )
 
-class TerminalRow(
-    val spans: MutableList<TerminalSpan> = mutableListOf()
-) {
-    fun rawText(): String = spans.joinToString("") { it.text }
+class TerminalRow {
+    val cells = mutableListOf<TerminalCell>()
+
+    fun length(): Int = cells.size
 
     fun clear() {
-        spans.clear()
+        cells.clear()
     }
 
-    fun append(text: String, color: Color, isBold: Boolean) {
-        if (text.isEmpty()) return
-        val last = spans.lastOrNull()
-        if (last != null && last.color == color && last.isBold == isBold) {
-            spans[spans.size - 1] = last.copy(text = last.text + text)
-        } else {
-            spans.add(TerminalSpan(text, color, isBold))
+    fun clearFrom(col: Int) {
+        while (cells.size > col) {
+            cells.removeAt(cells.size - 1)
         }
     }
 
-    fun overwriteFrom(startCol: Int, newText: String, color: Color, isBold: Boolean) {
-        val currentStr = rawText()
-        if (startCol >= currentStr.length) {
-            // Pad with spaces if needed
-            val spacesNeeded = startCol - currentStr.length
-            if (spacesNeeded > 0) {
-                append(" ".repeat(spacesNeeded), color, false)
+    fun clearRange(fromCol: Int, toCol: Int) {
+        val end = minOf(toCol, cells.size)
+        for (c in fromCol until end) {
+            cells[c].char = ' '
+            cells[c].fg = TerminalColors.DEFAULT_TEXT_COLOR
+            cells[c].bg = Color.Transparent
+            cells[c].isBold = false
+        }
+    }
+
+    fun setChar(col: Int, ch: Char, fg: Color, bg: Color, isBold: Boolean) {
+        while (cells.size <= col) {
+            cells.add(TerminalCell())
+        }
+        val cell = cells[col]
+        cell.char = ch
+        cell.fg = fg
+        cell.bg = bg
+        cell.isBold = isBold
+    }
+
+    fun writeString(startCol: Int, text: String, fg: Color, bg: Color, isBold: Boolean): Int {
+        for (i in text.indices) {
+            setChar(startCol + i, text[i], fg, bg, isBold)
+        }
+        return startCol + text.length
+    }
+
+    fun toAnnotatedString(): AnnotatedString {
+        if (cells.isEmpty()) return AnnotatedString("")
+
+        // Trim trailing spaces for clean layout
+        var lastNonSpace = cells.size - 1
+        while (lastNonSpace >= 0 && cells[lastNonSpace].char == ' ' && cells[lastNonSpace].bg == Color.Transparent) {
+            lastNonSpace--
+        }
+        if (lastNonSpace < 0) return AnnotatedString("")
+
+        val visibleLength = lastNonSpace + 1
+
+        return buildAnnotatedString {
+            var start = 0
+            while (start < visibleLength) {
+                val cell = cells[start]
+                var end = start + 1
+                while (end < visibleLength &&
+                    cells[end].fg == cell.fg &&
+                    cells[end].bg == cell.bg &&
+                    cells[end].isBold == cell.isBold
+                ) {
+                    end++
+                }
+
+                val str = StringBuilder(end - start)
+                for (k in start until end) {
+                    str.append(cells[k].char)
+                }
+
+                val style = SpanStyle(
+                    color = cell.fg,
+                    background = cell.bg,
+                    fontWeight = if (cell.isBold) FontWeight.Bold else FontWeight.Normal
+                )
+                append(AnnotatedString(str.toString(), style))
+                start = end
             }
-            append(newText, color, isBold)
-            return
-        }
-
-        // Split existing line into before startCol and after overwritten part
-        val before = currentStr.substring(0, startCol)
-        val afterStart = startCol + newText.length
-        val after = if (afterStart < currentStr.length) currentStr.substring(afterStart) else ""
-
-        spans.clear()
-        if (before.isNotEmpty()) {
-            spans.add(TerminalSpan(before, TerminalColors.DEFAULT_TEXT_COLOR, false))
-        }
-        spans.add(TerminalSpan(newText, color, isBold))
-        if (after.isNotEmpty()) {
-            spans.add(TerminalSpan(after, TerminalColors.DEFAULT_TEXT_COLOR, false))
         }
     }
 }
 
 object TerminalColors {
+    // Standard 16 ANSI colors
     val COLOR_BLACK = Color(0xFF1E1E24)
     val COLOR_RED = Color(0xFFFF6B6B)
     val COLOR_GREEN = Color(0xFF51CF66)
@@ -77,6 +117,7 @@ object TerminalColors {
     val COLOR_BRIGHT_MAGENTA = Color(0xFFDA77F2)
     val COLOR_BRIGHT_CYAN = Color(0xFF38D9A9)
     val COLOR_BRIGHT_WHITE = Color(0xFFFFFFFF)
+
     val DEFAULT_TEXT_COLOR = Color(0xFFD8DEE9)
 
     fun colorFromIndex(index: Int): Color {
@@ -100,11 +141,45 @@ object TerminalColors {
             else -> DEFAULT_TEXT_COLOR
         }
     }
+
+    /**
+     * Standard xterm 256-color palette
+     * 0-15: Standard & Bright ANSI
+     * 16-231: 6x6x6 RGB color cube
+     * 232-255: 24 grayscale steps
+     */
+    fun colorFrom256(index: Int): Color {
+        return when {
+            index in 0..15 -> colorFromIndex(index)
+            index in 16..231 -> {
+                val c = index - 16
+                val b = c % 6
+                val g = (c / 6) % 6
+                val r = c / 36
+
+                val rVal = if (r == 0) 0 else 55 + r * 40
+                val gVal = if (g == 0) 0 else 55 + g * 40
+                val bVal = if (b == 0) 0 else 55 + b * 40
+                Color(rVal, gVal, bVal)
+            }
+            index in 232..255 -> {
+                val gray = 8 + (index - 232) * 10
+                Color(gray, gray, gray)
+            }
+            else -> DEFAULT_TEXT_COLOR
+        }
+    }
 }
 
 /**
- * High-performance virtual terminal screen buffer supporting in-place updates,
- * screen clears, carriage returns, cursor movements, and window title extraction.
+ * Modern Virtual Terminal Screen Buffer
+ * - Cell-based grid with in-place updates (never wipes line colors on cursor rewrite)
+ * - Complete ANSI 16-color, 256-color, and 24-bit TrueColor RGB support
+ * - Foreground & Background color parsing
+ * - In-place line rewriting with carriage returns (\r)
+ * - Screen clear (\u001B[2J, \u001B[3J) & line clear (\u001B[K, \u001B[2K)
+ * - Cursor positioning (\u001B[H, \u001B[row;colH)
+ * - OSC window title extraction (\u001B]0;...\u0007, \u001B]2;...\u0007)
  */
 class TerminalScreenBuffer(
     private val maxScrollback: Int = 3000,
@@ -114,7 +189,8 @@ class TerminalScreenBuffer(
     private var cursorRow = 0
     private var cursorCol = 0
 
-    private var currentColor = TerminalColors.DEFAULT_TEXT_COLOR
+    private var currentFg = TerminalColors.DEFAULT_TEXT_COLOR
+    private var currentBg = Color.Transparent
     private var currentBold = false
 
     init {
@@ -129,7 +205,7 @@ class TerminalScreenBuffer(
         while (i < len) {
             val c = data[i]
 
-            // 1. Check for OSC sequence (\u001B]...)
+            // 1. OSC sequence (\u001B]...)
             if (c == '\u001B' && i + 1 < len && data[i + 1] == ']') {
                 val endBel = data.indexOf('\u0007', i + 2)
                 val endEsc = data.indexOf("\u001B\\", i + 2)
@@ -149,10 +225,10 @@ class TerminalScreenBuffer(
                 }
             }
 
-            // 2. Check for CSI sequence (\u001B[...)
+            // 2. CSI sequence (\u001B[...)
             if (c == '\u001B' && i + 1 < len && data[i + 1] == '[') {
                 var j = i + 2
-                while (j < len && (data[j] in '0'..'9' || data[j] == ';' || data[j] == '?' || data[j] == ' ')) {
+                while (j < len && (data[j] in '0'..'9' || data[j] == ';' || data[j] == ':' || data[j] == '?' || data[j] == ' ')) {
                     j++
                 }
                 if (j < len && (data[j] in 'a'..'z' || data[j] in 'A'..'Z')) {
@@ -164,15 +240,15 @@ class TerminalScreenBuffer(
                 }
             }
 
-            // 3. Simple escape or single character
+            // 3. Characters & Control codes
             when (c) {
                 '\r' -> {
-                    // Carriage return: return cursor to start of current row (crucial for CLI in-place updates!)
+                    // Carriage return: reset cursor to start of current line
                     cursorCol = 0
                     i++
                 }
                 '\n' -> {
-                    // Line feed: advance to next row
+                    // Line feed: advance to next line
                     cursorRow++
                     cursorCol = 0
                     ensureRowExists(cursorRow)
@@ -180,35 +256,32 @@ class TerminalScreenBuffer(
                     i++
                 }
                 '\b' -> {
-                    // Backspace
                     if (cursorCol > 0) cursorCol--
                     i++
                 }
-                '\u0007' -> {
-                    // Bell - ignore
+                '\t' -> {
+                    // Tab: advance to next 8-column tab stop
+                    val nextTab = (cursorCol / 8 + 1) * 8
+                    ensureRowExists(cursorRow)
+                    rows[cursorRow].writeString(cursorCol, " ".repeat(nextTab - cursorCol), currentFg, currentBg, currentBold)
+                    cursorCol = nextTab
                     i++
+                }
+                '\u0007' -> {
+                    i++ // Bell
                 }
                 '\u001B' -> {
-                    // Stray escape character - skip
-                    i++
+                    i++ // Stray escape
                 }
                 else -> {
-                    // Regular printable character
                     ensureRowExists(cursorRow)
                     val row = rows[cursorRow]
 
-                    // Find text segment until next control character
-                    val nextControl = data.indexOfAny(charArrayOf('\u001B', '\r', '\n', '\b', '\u0007'), i)
+                    val nextControl = data.indexOfAny(charArrayOf('\u001B', '\r', '\n', '\b', '\t', '\u0007'), i)
                     val end = if (nextControl != -1) nextControl else len
                     val textSegment = data.substring(i, end)
 
-                    if (cursorCol == row.rawText().length) {
-                        row.append(textSegment, currentColor, currentBold)
-                    } else {
-                        row.overwriteFrom(cursorCol, textSegment, currentColor, currentBold)
-                    }
-
-                    cursorCol += textSegment.length
+                    cursorCol = row.writeString(cursorCol, textSegment, currentFg, currentBg, currentBold)
                     i = end
                 }
             }
@@ -216,7 +289,6 @@ class TerminalScreenBuffer(
     }
 
     private fun handleOsc(payload: String) {
-        // OSC 0;title or OSC 2;title sets window title
         if (payload.startsWith("0;") || payload.startsWith("2;")) {
             val title = payload.substring(2)
             if (title.isNotBlank()) {
@@ -228,15 +300,13 @@ class TerminalScreenBuffer(
     private fun handleCsi(finalChar: Char, params: String) {
         when (finalChar) {
             'm' -> {
-                // SGR Color & Styling
                 handleSgr(params)
             }
             'J' -> {
-                // Erase in display
                 val mode = params.toIntOrNull() ?: 0
                 when (mode) {
                     2, 3 -> {
-                        // Clear entire screen!
+                        // Clear entire screen
                         rows.clear()
                         rows.add(TerminalRow())
                         cursorRow = 0
@@ -245,39 +315,34 @@ class TerminalScreenBuffer(
                     0 -> {
                         // Clear from cursor to end of screen
                         if (cursorRow < rows.size) {
-                            rows[cursorRow].overwriteFrom(cursorCol, "", currentColor, false)
+                            rows[cursorRow].clearFrom(cursorCol)
                             while (rows.size > cursorRow + 1) {
                                 rows.removeAt(rows.size - 1)
                             }
                         }
                     }
                     1 -> {
-                        // Clear from start of screen to cursor
+                        // Clear from start to cursor
                         for (r in 0 until cursorRow) {
                             rows[r].clear()
+                        }
+                        if (cursorRow < rows.size) {
+                            rows[cursorRow].clearRange(0, cursorCol)
                         }
                     }
                 }
             }
             'K' -> {
-                // Erase in line
                 val mode = params.toIntOrNull() ?: 0
                 ensureRowExists(cursorRow)
                 when (mode) {
                     0 -> {
                         // Clear from cursor to end of line
-                        val current = rows[cursorRow].rawText()
-                        if (cursorCol < current.length) {
-                            val kept = current.substring(0, cursorCol)
-                            rows[cursorRow].clear()
-                            if (kept.isNotEmpty()) {
-                                rows[cursorRow].append(kept, currentColor, false)
-                            }
-                        }
+                        rows[cursorRow].clearFrom(cursorCol)
                     }
                     1 -> {
-                        // Clear from start to cursor
-                        rows[cursorRow].overwriteFrom(0, " ".repeat(cursorCol), currentColor, false)
+                        // Clear from line start to cursor
+                        rows[cursorRow].clearRange(0, cursorCol)
                     }
                     2 -> {
                         // Clear entire line
@@ -288,7 +353,7 @@ class TerminalScreenBuffer(
             }
             'H', 'f' -> {
                 // Cursor position: [row;colH (1-indexed)
-                val parts = params.split(";")
+                val parts = params.split(";", ":")
                 val targetRow = (parts.getOrNull(0)?.toIntOrNull() ?: 1) - 1
                 val targetCol = (parts.getOrNull(1)?.toIntOrNull() ?: 1) - 1
                 cursorRow = maxOf(0, targetRow)
@@ -296,28 +361,23 @@ class TerminalScreenBuffer(
                 ensureRowExists(cursorRow)
             }
             'A' -> {
-                // Cursor Up
                 val count = params.toIntOrNull() ?: 1
                 cursorRow = maxOf(0, cursorRow - count)
             }
             'B' -> {
-                // Cursor Down
                 val count = params.toIntOrNull() ?: 1
                 cursorRow += count
                 ensureRowExists(cursorRow)
             }
             'C' -> {
-                // Cursor Forward
                 val count = params.toIntOrNull() ?: 1
                 cursorCol += count
             }
             'D' -> {
-                // Cursor Backward
                 val count = params.toIntOrNull() ?: 1
                 cursorCol = maxOf(0, cursorCol - count)
             }
             'G' -> {
-                // Cursor to column
                 val col = (params.toIntOrNull() ?: 1) - 1
                 cursorCol = maxOf(0, col)
             }
@@ -326,47 +386,87 @@ class TerminalScreenBuffer(
 
     private fun handleSgr(params: String) {
         if (params.isEmpty()) {
-            currentColor = TerminalColors.DEFAULT_TEXT_COLOR
-            currentBold = false
+            resetSgr()
             return
         }
 
-        val codes = params.split(";").mapNotNull { it.toIntOrNull() }
+        // Support both semicolon ';' and colon ':' parameter delimiters
+        val codes = params.replace(":", ";").split(";").mapNotNull { it.toIntOrNull() }
         var idx = 0
+
         while (idx < codes.size) {
             when (val code = codes[idx]) {
                 0 -> {
-                    currentColor = TerminalColors.DEFAULT_TEXT_COLOR
-                    currentBold = false
+                    resetSgr()
                 }
                 1 -> currentBold = true
-                22 -> currentBold = false
-                30, 31, 32, 33, 34, 35, 36, 37 -> {
-                    currentColor = TerminalColors.colorFromIndex(code - 30)
+                2 -> currentBold = false // Dim
+                22 -> currentBold = false // Normal weight
+
+                // Standard 8 Foreground colors
+                in 30..37 -> {
+                    currentFg = TerminalColors.colorFromIndex(code - 30)
                 }
-                39 -> currentColor = TerminalColors.DEFAULT_TEXT_COLOR
-                90, 91, 92, 93, 94, 95, 96, 97 -> {
-                    currentColor = TerminalColors.colorFromIndex(code - 90 + 8)
-                }
+                39 -> currentFg = TerminalColors.DEFAULT_TEXT_COLOR
+
+                // Extended Foreground Color (256-color or TrueColor RGB)
                 38 -> {
-                    // Extended color: 38;5;index or 38;2;r;g;b
                     if (idx + 2 < codes.size && codes[idx + 1] == 5) {
+                        // 38;5;index (256-color palette)
                         val colorIndex = codes[idx + 2]
-                        if (colorIndex in 0..15) {
-                            currentColor = TerminalColors.colorFromIndex(colorIndex)
-                        }
+                        currentFg = TerminalColors.colorFrom256(colorIndex)
                         idx += 2
                     } else if (idx + 4 < codes.size && codes[idx + 1] == 2) {
-                        val r = codes[idx + 2]
-                        val g = codes[idx + 3]
-                        val b = codes[idx + 4]
-                        currentColor = Color(r, g, b)
+                        // 38;2;r;g;b (24-bit TrueColor)
+                        val r = codes[idx + 2].coerceIn(0, 255)
+                        val g = codes[idx + 3].coerceIn(0, 255)
+                        val b = codes[idx + 4].coerceIn(0, 255)
+                        currentFg = Color(r, g, b)
                         idx += 4
                     }
+                }
+
+                // Standard 8 Background colors
+                in 40..47 -> {
+                    currentBg = TerminalColors.colorFromIndex(code - 40)
+                }
+                49 -> currentBg = Color.Transparent
+
+                // Extended Background Color (256-color or TrueColor RGB)
+                48 -> {
+                    if (idx + 2 < codes.size && codes[idx + 1] == 5) {
+                        // 48;5;index (256-color palette)
+                        val colorIndex = codes[idx + 2]
+                        currentBg = TerminalColors.colorFrom256(colorIndex)
+                        idx += 2
+                    } else if (idx + 4 < codes.size && codes[idx + 1] == 2) {
+                        // 48;2;r;g;b (24-bit TrueColor)
+                        val r = codes[idx + 2].coerceIn(0, 255)
+                        val g = codes[idx + 3].coerceIn(0, 255)
+                        val b = codes[idx + 4].coerceIn(0, 255)
+                        currentBg = Color(r, g, b)
+                        idx += 4
+                    }
+                }
+
+                // Bright 8 Foreground colors
+                in 90..97 -> {
+                    currentFg = TerminalColors.colorFromIndex(code - 90 + 8)
+                }
+
+                // Bright 8 Background colors
+                in 100..107 -> {
+                    currentBg = TerminalColors.colorFromIndex(code - 100 + 8)
                 }
             }
             idx++
         }
+    }
+
+    private fun resetSgr() {
+        currentFg = TerminalColors.DEFAULT_TEXT_COLOR
+        currentBg = Color.Transparent
+        currentBold = false
     }
 
     private fun ensureRowExists(rowIndex: Int) {
@@ -392,13 +492,7 @@ class TerminalScreenBuffer(
         return buildAnnotatedString {
             for (rowIndex in rows.indices) {
                 val row = rows[rowIndex]
-                for (span in row.spans) {
-                    val style = SpanStyle(
-                        color = span.color,
-                        fontWeight = if (span.isBold) FontWeight.Bold else FontWeight.Normal
-                    )
-                    append(AnnotatedString(span.text, style))
-                }
+                append(row.toAnnotatedString())
                 if (rowIndex < rows.size - 1) {
                     append("\n")
                 }
@@ -412,7 +506,6 @@ class TerminalScreenBuffer(
         rows.add(TerminalRow())
         cursorRow = 0
         cursorCol = 0
-        currentColor = TerminalColors.DEFAULT_TEXT_COLOR
-        currentBold = false
+        resetSgr()
     }
 }

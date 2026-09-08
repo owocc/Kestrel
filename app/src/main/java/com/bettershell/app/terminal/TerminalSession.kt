@@ -134,7 +134,13 @@ class TerminalSession(
                 jschSession = session
 
                 val ch = session.openChannel("shell") as ChannelShell
-                ch.setPtyType("xterm-256color", 100, 40, 800, 600)
+                ch.setPtyType("xterm-256color", 120, 40, 960, 640)
+                try {
+                    ch.setEnv("TERM", "xterm-256color")
+                    ch.setEnv("COLORTERM", "truecolor")
+                } catch (e: Exception) {
+                    // Ignore if sshd restricts env
+                }
                 val inStream = ch.inputStream
                 outputStream = ch.outputStream
                 ch.connect(5000)
