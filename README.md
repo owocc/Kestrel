@@ -5,12 +5,11 @@
 </p>
 
 <p align="center">
-  <strong>专为 AI 编程与个人 Agent 办公打造的极简移动远程终端</strong>
+  <strong>专为远程控制电脑与服务器所有 AI Coding Agent 打造的极简移动 SSH 终端</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/owocc/Kestrel"><img src="https://img.shields.io/badge/Release-v1.0.0--alpha-blue.svg?style=flat-square" alt="Version" /></a>
-  <a href="https://developer.android.com/about/versions/16"><img src="https://img.shields.io/badge/Android-16%20Ready%20(API%2036)-brightgreen.svg?style=flat-square" alt="Android 16" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-orange.svg?style=flat-square" alt="License" /></a>
   <a href="https://github.com/owocc/Kestrel"><img src="https://img.shields.io/badge/Vibe%20Coding-100%25-ff69b4.svg?style=flat-square" alt="Vibe" /></a>
 </p>
@@ -19,82 +18,62 @@
 
 ## 🌟 什么是 Kestrel？
 
-**Kestrel**（红隼）是一款专为 **AI 编程** 与 **个人 Agent 办公** 深度开发的现代移动远程终端。
+**Kestrel**（红隼）是一款专注于 **远程 SSH 连接、一键调度电脑与服务器上所有 AI Agent 并提供完备终端操作** 的现代移动生产力工具。
 
-不同于传统粗糙笨重的 SSH 移动工具，Kestrel 深度融合了 **OpenAI / ChatGPT 极简交互美学** 与 **先进的多 Agent 结构化工作流规范**。它专为在移动设备上无缝调度、掌控远程服务器中的各类 Coding Agent（如 `omp`、`Claude Code`、`Codex`、`Aider` 等）与日常个人自动化工作流而生，同时保留了完整强大的交互式 VT100 / ANSI 原生终端能力。
-
----
-
-## ✨ 核心特色功能
-
-### 1. 🌓 真正的沉浸式双模工作区 (Work <-> Terminal)
-- **Work（AI 智能协同模式）**：
-  - **ChatGPT 风格一体化输入胶囊**：悬浮抬高设计，集成多行拓展、文件插入与操作动作。
-  - **AI 纯净直接输出**：彻底去除陈旧的聊天气泡与冗余小头像，Markdown、代码块与结构化步骤自然展开，视野开阔。
-  - **全量文本选择支持**：内置 `SelectionContainer` 与针对深/浅模式定制的高对比度半透明选区遮罩（带细腻灰色水滴手柄），任意段落长按即选、随意复制。
-  - **默认折叠执行流**：多步骤 Agent 运行详情默认收纳为轻量触发条，零边距平铺，清爽克制。
-- **Terminal（原生交互终端模式）**：
-  - 高性能真实 PTY / Shell 会话，支持完整 ANSI 颜色与特殊快捷键栏。
-  - 展开式多行脚本编辑器，自适应软键盘抬升，自动聚焦闪烁光标，命令编辑丝滑流畅。
-- **中央双模切换胶囊**：顶栏搭载触感弹簧滑块，一键在对话工作流与物理命令行之间瞬间无缝穿梭。
-
-### 2. 🗂️ 首页服务器卡片系统与隐私保护
-- **OpenAI 风格智能圆角与间距**：列表首尾卡片自适应 `22dp / 6dp` 大小圆角变换，中间保持 3dp 呼吸空隙。
-- **正方形网格（1:1）与左上角排版**：双列网格模式下严格呈正方形比例，标题与用途描述自左上角自然铺陈。
-- **25° 反向倾斜浮雕暗纹**：卡片底纹内嵌 -25° 逆时针微光矢量图标，向右自然渐隐至透明（5% 极致克制透明度），绝不干扰前排文字阅读。
-- **全方位隐私安全保护**：卡片上彻底隐去敏感的主机 IP、端口与用户名，仅显示自定义服务器标题与用途描述。
-- **本地偏好持久化**：随心切换列表或网格排列，自动记住你的偏好视图。
-
-### 3. 🤖 深度多 Agent 运行时生态
-- **支持自选丰富图标库**：内置经过精心分类整理的官方高品质 **Tabler Icons** 矢量图集，包含终端、服务器、云、Docker、Git 等精品图标。
-- **一键 SSH 快速探针**：服务器 Agent 配置页配备右上角动态旋转刷新按钮与快速检测卡片，通过无侵入式探针深度嗅探远程主机上的 Agent 运行环境。
-- **独立规范化单选弹窗**：切换 Agent、切换 LLM 模型（如 `gemini-3.8-flash`、`claude-sonnet`、`gpt-4o`、`deepseek-chat`）及调整思考程度（Thinking Level）均采用固定 2/3 屏幕高度、带有顶部渐隐微光圆角描边（`bottomSheetTopBorder`）与 ChatGPT 同心圆单选卡片。
-
-### 4. 📜 全新独立双模式“日志”页面
-- **纯净顶栏切换**：页头右侧一个圆形操作按钮即可在 **`结构化事件流`** 与 **`纯文本原始日志`** 之间秒切。
-- **结构化模式**：一行一个事件卡片，包含精确时间戳、彩色状态类型小胶囊与可折叠的 JSON/调用参数。
-- **纯文本模式**：深色 Monospace 终端文本框，支持横向 + 纵向平滑滚动及长按自由划词。
-
-### 5. 🎯 现代手势流与沉浸式体验
-- **全屏预测式返回手势（Predictive Back）**：
-  - 基于 `SeekableTransitionState` 构建的全屏单 Activity 纯 Compose 导航栈（`screenStack`）。
-  - 支持边缘右滑返回手势实时跟随手指进度缩放与预览上一级页面，如丝般顺滑。
-- **纯粹黑白高对比度主题**：
-  - 纯黑（`#000000`）与纯白（`#F8F9FB`）底色，搭配与顶栏滑块严格一致的高级中灰强调色（`#424242` / `#FFFFFF`）。
+出门在外或躺在沙发上，无需随身携带厚重的笔记本电脑。只需在手机上打开 Kestrel，就能通过安全快速的 SSH 协议直连你的远程主机、工作站或云服务器：
+- **一键感知与唤起电脑上的所有 Coding Agent**：不论是 `omp`、`Claude Code`、`Codex`、`Aider`、`OpenCode` 还是自定义 CLI 工具，全部无缝纳管；
+- **纯粹强大的原生交互终端**：提供完整 PTY Shell、ANSI 彩色高亮与长文本编辑支持，满足你随时随地查看进程、修改配置、运行脚本的全部终端运维诉求。
 
 ---
 
-## 🛠️ 技术栈与架构
+## ✨ 核心主打功能
 
-- **核心语言**：Kotlin 2.0+ (Jetpack Compose 现代声明式 UI)
-- **编译目标**：Android 16 (API 36 / Android VanillaIceCream)
-- **通信协议**：JSch (SSH2 Client / PTY Shell / Exec Channel)
-- **多智能体协议**：Multica Agent Event Stream / OMP JSON Protocol
-- **矢量图标系统**：
-  - **Tabler Icons Compose** (官方原生 ImageVector 适配)
-  - **Lucide Icons** (高精度 24x24 原版几何路径)
-- **代码字体**：JetBrains Mono Nerd Font / Fira Code Nerd Font
-- **本地存储**：AndroidX SharedPreferences / SQLite LibSQL 本地数据库
+### 1. ⚡ 远程 SSH 一键调用电脑上的所有 AI Agent
+- **无侵入式智能环境探针**：连接远程服务器后，后台探针会自动扫描登录 Shell、系统 PATH 以及常用环境管理器（`nvm`、`fnm`、`cargo`、`~/.local/bin` 等），深度感知并汇总当前电脑上已安装的全部 AI 智能体；
+- **全方位 Agent 随心切换**：支持在会话中一键自由挑选不同的 Agent 工具（如用 `omp` 进行全栈代码生成、用 `Claude Code` 快速审查、用 `Codex` 辅助调优）；
+- **动态大模型与思考程度配置**：无需在命令行记忆复杂参数，图形化一键切换推理大模型（`gemini-3.8-flash`、`claude-sonnet`、`gpt-4o`、`deepseek-chat` 等）并按需调控思考程度（Thinking Level）；
+- **原生多 Agent 结构化工作流**：支持解析并呈现 Agent 的思考链（Thinking）、多步工具调用（Tool Use）与结构化执行日志，随时把控执行进度。
+
+### 2. 💻 完备强大的移动端交互式原生终端
+- **真正全功能的 PTY 终端**：内置高性能 VT100 / ANSI 终端仿真引擎，完美支持 `vim`、`tmux`、`htop` 等全屏终端应用的流畅交互与彩色渲染；
+- **专业命令行快捷输入栏**：精心配备 `Ctrl`、`Esc`、`Tab`、方向键以及管道符等移动端不可或缺的物理按键辅助栏；
+- **多行脚本展开编辑器**：支持一键将单行输入展开为全尺寸长文本代码编辑器，软键盘自动升起聚焦，编写多行复杂 Shell 脚本或长 Prompt 轻松从容。
+
+### 3. 🌓 对话工作流与终端模式一键切换
+- **中央双模滑块（Work <-> Terminal）**：
+  - **Work 模式**：专注于与 AI Agent 的对话与结构化产出，文字与代码直接平铺排版，支持任意文本长按自由选择与复制；
+  - **Terminal 模式**：专注于 Linux 原生命令交互与系统运维；
+  - 顶栏一键极速横跳，两套运行时状态独立保持、互不干扰。
+
+### 4. 🗂️ 服务器多节点资产管理与隐私保护
+- **多主机快速接入**：支持密码认证、私钥免密登录（PEM / OpenSSH / 带 Passphrase 私钥）；
+- **自选图标个性化标识**：内置丰富的官方 **Tabler Icons** 系统图标库（终端、服务器、Docker、Git、云等），随心定制每个节点的专属外观；
+- **隐私保护设计**：首页卡片严格隐藏真实主机 IP 与账号端口，仅展示自定义服务器名称与业务用途说明。
 
 ---
 
-## 🚀 编译与快速开始
+## 🛠️ 技术栈
 
-### 依赖环境
-- Android Studio Ladybug | 2024.2.1 或更新版本
-- JDK 17 / 21
-- Android SDK Platform 36 (Android 16)
+- **构建框架**：Kotlin / Jetpack Compose 现代声明式 UI
+- **SSH 引擎**：JSch (SSH2 纯 Java 协议栈 / PTY Shell / Exec Channel)
+- **多智能体规范**：OMP JSON 协议 / Multica 结构化事件流驱动
+- **图标系统**：Tabler Icons Compose / Lucide Icons
+- **本地存储**：SQLite LibSQL / AndroidX SharedPreferences
+
+---
+
+## 🚀 快速开始
 
 ### 本地编译构建
 ```bash
-# 克隆本仓库
+# 1. 克隆代码仓库
 git clone git@github.com:owocc/Kestrel.git
 cd Kestrel
 
-# 使用 Gradle 编译 Debug APK
+# 2. 编译 Debug APK
 ./gradlew assembleDebug
 
-# 安装到连接的设备
+# 3. 安装到手机 (确保开启 ADB 调试)
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -102,15 +81,13 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## 💖 特别致谢 (Acknowledgements)
 
-Kestrel 是一次纯粹而热烈的 **Vibe Coding** 探索，在此诚挚致谢：
-
-- **哈吉米 (Gemini)**：随叫随到的 AI 结对编程搭子，负责秒懂每一次奇思妙想，把每一处灵感利索敲成优雅代码！
+- **哈吉米 (Gemini)**：随叫随到的 AI 结对编程搭子，负责秒懂你的奇思妙想，把每一处灵感利索敲成代码！
 - **omp (Oh My Pi)**：极其好用、高效敏捷的 AI Coding Agent，驱动整个开发流程顺畅流转的核心加速器。
 - **Multica**：感谢 Multica 优秀的多 Agent 交互架构，为本项目提供了至关重要的灵感启发与坚实参考。
-- **OpenAI / ChatGPT**：致敬 OpenAI 移动端出色的交互节奏与现代美学设计，带来极致克制而高级的视觉灵感。
+- **OpenAI**：致敬 OpenAI 移动端出色的交互节奏与现代美学设计，带来极致克制而高级的视觉灵感。
 
 ---
 
-## 📄 开源许可证
+## 📄 开源协议
 
-本项目基于 **[Apache License 2.0](LICENSE)** 协议开源。详细第三方依赖库、字体与矢量图集授权可进入 App 内的 **设置 -> 关于 -> 打开开源许可证** 查看。
+本项目基于 **[Apache License 2.0](LICENSE)** 协议开源。详细第三方依赖库与图标授权可在 App 内的 **设置 -> 关于 -> 打开开源许可证** 中查阅。
