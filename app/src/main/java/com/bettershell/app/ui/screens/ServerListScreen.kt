@@ -394,8 +394,9 @@ fun ServerCard(
                         )
                     }
             ) {
+                val serverIcon = com.bettershell.app.ui.components.ServerIconCatalog.getIcon(server.icon, server.isMock)
                 Icon(
-                    imageVector = if (server.isMock) LucideIcons.Bot else LucideIcons.Terminal,
+                    imageVector = serverIcon,
                     contentDescription = null,
                     // 图标颜色为字体色，提高可见度
                     tint = titleColor.copy(alpha = if (isDark) 0.35f else 0.28f),
@@ -532,8 +533,9 @@ fun ServerGridCard(
                         )
                     }
             ) {
+                val serverIcon = com.bettershell.app.ui.components.ServerIconCatalog.getIcon(server.icon, server.isMock)
                 Icon(
-                    imageVector = if (server.isMock) LucideIcons.Bot else LucideIcons.Terminal,
+                    imageVector = serverIcon,
                     contentDescription = null,
                     tint = titleColor.copy(alpha = if (isDark) 0.35f else 0.28f),
                     modifier = Modifier

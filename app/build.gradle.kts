@@ -70,4 +70,5 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.jsch)
+    implementation("br.com.devsrsouza.compose.icons:tabler-icons:1.1.1")
 }

@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,6 +63,8 @@ fun ServerBasicSettingsScreen(
 
     var name by remember { mutableStateOf(server.name) }
     var description by remember { mutableStateOf(server.description) }
+    var selectedIconKey by remember { mutableStateOf(server.icon.ifBlank { "terminal" }) }
+    var showIconPicker by remember { mutableStateOf(false) }
     var host by remember { mutableStateOf(server.host) }
     var portText by remember { mutableStateOf(server.port.toString()) }
     var username by remember { mutableStateOf(server.username) }
@@ -74,6 +79,7 @@ fun ServerBasicSettingsScreen(
         val updated = server.copy(
             name = name.ifBlank { "Server" },
             description = description.trim(),
+            icon = selectedIconKey,
             host = host.trim(),
             port = p,
             username = username.trim().ifBlank { "root" },
@@ -123,6 +129,46 @@ fun ServerBasicSettingsScreen(
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
+                    // 自选图标选择条目
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { showIconPicker = true },
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (isDark) Color(0xFF161616) else Color(0xFFFFFFFF),
+                        border = BorderStroke(1.dp, if (isDark) Color(0xFF2C2D30) else Color(0xFFE5E7EB))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = com.bettershell.app.ui.components.ServerIconCatalog.getIcon(selectedIconKey),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "服务器图标",
+                                    fontSize = 15.sp,
+                                    color = if (isDark) Color(0xFFF3F4F6) else Color(0xFF111827)
+                                )
+                            }
+                            Text(
+                                text = "更换图标 >",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     OutlinedTextField(
                         value = description,
                         onValueChange = { description = it },
@@ -245,5 +291,13 @@ fun ServerBasicSettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+
+    if (showIconPicker) {
+        com.bettershell.app.ui.components.ServerIconPickerBottomSheet(
+            currentIconKey = selectedIconKey,
+            onSelectIcon = { selectedIconKey = it },
+            onDismiss = { showIconPicker = false }
+        )
     }
 }
