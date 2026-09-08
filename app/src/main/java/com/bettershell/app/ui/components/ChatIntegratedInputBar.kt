@@ -167,19 +167,24 @@ fun ChatIntegratedInputBar(
                             isDark = isDark,
                             items = listOf(
                                 OpenAiMenuItemData(
-                                    title = "选择 Agent 与模型",
-                                    icon = Icons.Rounded.SmartToy,
+                                    title = "选择 Agent",
+                                    icon = LucideIcons.Bot,
                                     onClick = onOpenAgentPicker
                                 ),
                                 OpenAiMenuItemData(
                                     title = "更深入思考",
-                                    icon = Icons.Rounded.Psychology,
+                                    icon = LucideIcons.Brain,
                                     onClick = onToggleDeepThinking
                                 ),
                                 OpenAiMenuItemData(
                                     title = "插入文件路径",
-                                    icon = Icons.Rounded.AttachFile,
+                                    icon = LucideIcons.Paperclip,
                                     onClick = { onTextChanged(text + " @") }
+                                ),
+                                OpenAiMenuItemData(
+                                    title = "图片与快照",
+                                    icon = LucideIcons.Image,
+                                    onClick = { onTextChanged(text + " ") }
                                 )
                             )
                         )

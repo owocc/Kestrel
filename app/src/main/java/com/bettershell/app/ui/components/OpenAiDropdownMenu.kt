@@ -1,6 +1,7 @@
 package com.bettershell.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -38,11 +39,11 @@ data class OpenAiMenuItemData(
 )
 
 /**
- * 完整对齐截图 3 的 OpenAI 风格大圆角浮层菜单 (ChatGPT Popover Menu)
- * - 超大圆角 RoundedCornerShape(26.dp)
- * - 纯色背景 (浅色 #FFFFFF 或极淡灰色，深色 #222222)
- * - 左侧圆形灰底图标衬底 (Grey Circle Icon Surface)
- * - 右侧清晰文字，点击反馈轻盈
+ * 完整对齐 OpenAI / ChatGPT 规范的大圆角高立体感浮层菜单 (Large Shadow & Clean Lucide Icons):
+ * - 超大立体柔和阴影 (16dp shadowElevation + 细微半透明边界)
+ * - 24dp 圆润圆角 (RoundedCornerShape(24.dp))
+ * - 彻底去除图标背景底衬，纯净展示原生 Lucide 线条图标
+ * - 菜单文字排版紧凑优雅
  */
 @Composable
 fun OpenAiDropdownMenu(
@@ -52,12 +53,13 @@ fun OpenAiDropdownMenu(
     modifier: Modifier = Modifier,
     isDark: Boolean = false,
     offset: DpOffset = DpOffset(0.dp, 0.dp),
-    width: Dp = 210.dp
+    width: Dp = 200.dp
 ) {
-    val menuBg = if (isDark) Color(0xFF222222) else Color(0xFFFFFFFF)
+    val menuBg = if (isDark) Color(0xFF1E1E1E) else Color(0xFFFFFFFF)
+    val borderColor = if (isDark) Color(0xFF333333) else Color(0xFFE5E7EB)
 
     MaterialTheme(
-        shapes = MaterialTheme.shapes.copy(extraSmall = RoundedCornerShape(26.dp))
+        shapes = MaterialTheme.shapes.copy(extraSmall = RoundedCornerShape(24.dp))
     ) {
         DropdownMenu(
             expanded = expanded,
@@ -65,10 +67,17 @@ fun OpenAiDropdownMenu(
             offset = offset,
             modifier = modifier
                 .width(width)
+                .shadow(
+                    elevation = 16.dp,
+                    shape = RoundedCornerShape(24.dp),
+                    spotColor = Color.Black.copy(alpha = if (isDark) 0.65f else 0.18f),
+                    ambientColor = Color.Black.copy(alpha = if (isDark) 0.5f else 0.12f)
+                )
                 .background(menuBg)
+                .border(1.dp, borderColor.copy(alpha = 0.55f), RoundedCornerShape(24.dp))
                 .padding(vertical = 8.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 items.forEach { item ->
                     OpenAiDropdownMenuItemRow(
                         title = item.title,
@@ -97,8 +106,7 @@ fun OpenAiDropdownMenuItemRow(
     isDark: Boolean = false,
     onClick: () -> Unit
 ) {
-    val iconCircleBg = if (isDark) Color(0xFF333333) else Color(0xFFF3F4F6)
-    val defaultIconColor = if (isDark) Color(0xFFE5E7EB) else Color(0xFF1F2937)
+    val defaultIconColor = if (isDark) Color(0xFFE5E7EB) else Color(0xFF262626)
     val actualIconTint = when {
         isDestructive -> MaterialTheme.colorScheme.error
         iconTint != null -> iconTint
@@ -113,31 +121,23 @@ fun OpenAiDropdownMenuItemRow(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = 16.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 左侧圆形图标底衬 (对标截图 3)
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(iconCircleBg),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = actualIconTint,
-                modifier = Modifier.size(18.dp)
-            )
-        }
+        // 无底衬、纯粹原生 Lucide 图标 (对齐需求: 内部的图标全部去除背景)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = actualIconTint,
+            modifier = Modifier.size(20.dp)
+        )
 
         Text(
             text = title,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 15.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Normal
             ),
             color = textColor
         )

@@ -155,6 +155,7 @@ import com.bettershell.app.agent.DiscoveredAgent
 import com.bettershell.app.agent.UniversalAgentRunner
 import com.bettershell.app.ui.components.AgentPickerBottomSheet
 import com.bettershell.app.ui.components.ChatIntegratedInputBar
+import com.bettershell.app.ui.components.LucideIcons
 import com.bettershell.app.ui.components.OpenAiDropdownMenu
 import com.bettershell.app.ui.components.OpenAiMenuItemData
 import com.bettershell.app.ui.components.UnifiedServerSettingsBottomSheet
@@ -759,14 +760,14 @@ fun SessionTopBar(
             menuItems.add(
                 OpenAiMenuItemData(
                     title = "会话列表 (${server.name})",
-                    icon = Icons.Rounded.Terminal,
+                    icon = LucideIcons.Terminal,
                     onClick = onTitleClick
                 )
             )
             menuItems.add(
                 OpenAiMenuItemData(
                     title = "查看 Chat 原始日志",
-                    icon = Icons.Rounded.Code,
+                    icon = LucideIcons.Code2,
                     iconTint = AccentCyan,
                     onClick = onViewLogs
                 )
@@ -774,7 +775,7 @@ fun SessionTopBar(
             menuItems.add(
                 OpenAiMenuItemData(
                     title = if (softWrap) "禁用自动换行" else "启用自动换行",
-                    icon = Icons.AutoMirrored.Rounded.WrapText,
+                    icon = LucideIcons.WrapText,
                     onClick = onToggleSoftWrap
                 )
             )
@@ -782,7 +783,7 @@ fun SessionTopBar(
                 menuItems.add(
                     OpenAiMenuItemData(
                         title = "重新连接",
-                        icon = Icons.Rounded.Refresh,
+                        icon = LucideIcons.RefreshCw,
                         iconTint = AccentGreen,
                         onClick = onReconnect
                     )
@@ -791,18 +792,17 @@ fun SessionTopBar(
             menuItems.add(
                 OpenAiMenuItemData(
                     title = "清空终端",
-                    icon = Icons.Rounded.DeleteSweep,
+                    icon = LucideIcons.Eraser,
                     onClick = onClear
                 )
             )
             menuItems.add(
                 OpenAiMenuItemData(
                     title = "服务器设置",
-                    icon = Icons.Rounded.Settings,
+                    icon = LucideIcons.Settings,
                     onClick = onOpenSettings
                 )
             )
-
             OpenAiDropdownMenu(
                 expanded = showMoreMenu,
                 onDismissRequest = { showMoreMenu = false },

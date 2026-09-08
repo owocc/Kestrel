@@ -1,6 +1,7 @@
 package com.bettershell.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -17,8 +18,6 @@ import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.FontDownload
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -26,28 +25,29 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bettershell.app.data.AppThemeMode
-import com.bettershell.app.data.TerminalFont
 import com.bettershell.app.data.TerminalPreferencesRepository
 import com.bettershell.app.ui.components.OpenAiSectionCard
 import com.bettershell.app.ui.components.OpenAiSettingRow
 import com.bettershell.app.ui.components.StandardPageHeader
 
 /**
- * 软件全局设置页面 (严格按照用户截图 1 & 截图 2 的 OpenAI 极简色块规范):
- * - 规范化 StandardPageHeader (左侧圆钮返回、中间居中标题)
- * - 规范化 OpenAiSectionCard (大圆角卡片，内含细分割线条目行)
- * - 全局唯一的主题模式切换入口
+ * 软件全局设置页面 (严格按照多列 OpenAI 分组):
+ * - 外观主题切换 (唯一入口)
+ * - 终端字体设置 (点击 push 进入 AppFontSettingsScreen 路由栈)
+ * - 关于 (点击 push 进入 AppAboutScreen 路由栈)
  */
 @Composable
 fun AppSettingsScreen(
     prefsRepository: TerminalPreferencesRepository,
+    onNavigateToFontSettings: () -> Unit,
+    onNavigateToAbout: () -> Unit,
     onBack: () -> Unit
 ) {
     val prefs by prefsRepository.preferences.collectAsState()
     val isDark = when (prefs.themeMode) {
         AppThemeMode.DARK -> true
         AppThemeMode.LIGHT -> false
-        AppThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+        AppThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
 
     Column(
@@ -56,7 +56,6 @@ fun AppSettingsScreen(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
     ) {
-        // 规范化页头 (截图 2 规范)
         StandardPageHeader(
             title = "设置",
             onBack = onBack,
@@ -73,7 +72,7 @@ fun AppSettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
-            // 1. 主题与外观色块卡片 (对齐截图 1 规范)
+            // 1. 主题与外观 (去除染色，统一天然单色)
             OpenAiSectionCard(
                 headerTitle = "外观",
                 isDark = isDark
@@ -107,34 +106,35 @@ fun AppSettingsScreen(
                 )
             }
 
-            // 2. 终端默认字体色块卡片
+            // 2. 终端偏好 (点击进入单独路由页面)
             OpenAiSectionCard(
-                headerTitle = "终端代码字体",
+                headerTitle = "终端偏好",
                 isDark = isDark
             ) {
-                TerminalFont.entries.forEachIndexed { index, font ->
-                    OpenAiSettingRow(
-                        title = font.displayName,
-                        icon = Icons.Rounded.FontDownload,
-                        trailingText = if (prefs.font == font) "✓" else null,
-                        showDivider = index < TerminalFont.entries.lastIndex,
-                        isDark = isDark,
-                        onClick = { prefsRepository.updateFont(font) }
-                    )
-                }
+                OpenAiSettingRow(
+                    title = "终端代码字体",
+                    subtitle = prefs.font.displayName,
+                    icon = Icons.Rounded.FontDownload,
+                    showChevron = true,
+                    showDivider = false,
+                    isDark = isDark,
+                    onClick = onNavigateToFontSettings
+                )
             }
 
-            // 3. 关于与协议
+            // 3. 关于页面 (点击进入单独路由页面)
             OpenAiSectionCard(
                 headerTitle = "关于",
                 isDark = isDark
             ) {
                 OpenAiSettingRow(
-                    title = "BetterShell",
-                    subtitle = "v1.0 (Android 16 Ready) · 集成 omp 与 Multica",
+                    title = "关于 BetterShell",
+                    subtitle = "v1.0 (Android 16 Ready)",
                     icon = Icons.Rounded.Info,
+                    showChevron = true,
                     showDivider = false,
-                    isDark = isDark
+                    isDark = isDark,
+                    onClick = onNavigateToAbout
                 )
             }
 

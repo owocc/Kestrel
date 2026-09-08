@@ -3,7 +3,6 @@ package com.bettershell.app
 import kotlinx.coroutines.launch
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedContent
@@ -25,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.bettershell.app.agent.DiscoveredAgent
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.data.ServerRepository
 import com.bettershell.app.ui.screens.ServerListScreen
@@ -35,7 +35,13 @@ import com.bettershell.app.ui.theme.TerminalBlack
 sealed interface Screen {
     data object ServerList : Screen
     data object AppSettings : Screen
+    data object AppFontSettings : Screen
+    data object AppAbout : Screen
     data class ServerSettings(val server: ServerConfig, val fromSession: Boolean = false) : Screen
+    data class ServerBasicSettings(val server: ServerConfig) : Screen
+    data class ServerAgentSettings(val server: ServerConfig) : Screen
+    data class SingleAgentConfig(val server: ServerConfig, val agent: DiscoveredAgent) : Screen
+    data class ServerStartupScript(val server: ServerConfig) : Screen
     data class Session(val server: ServerConfig) : Screen
     data class RawLogs(val server: ServerConfig, val logs: String) : Screen
 }
@@ -58,7 +64,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val coroutineScope = rememberCoroutineScope()
-                    // 屏幕导航栈：记录完整的历史页面，支持预见式返回时底层渲染真实的上一页
+                    // 屏幕路由栈：每一次点击进入新的子页面，完全压入栈中！
                     var screenStack by remember { mutableStateOf<List<Screen>>(listOf(Screen.ServerList)) }
                     val currentScreen = screenStack.last()
 
@@ -92,6 +98,19 @@ class MainActivity : ComponentActivity() {
                             is Screen.AppSettings -> {
                                 com.bettershell.app.ui.screens.AppSettingsScreen(
                                     prefsRepository = terminalPrefsRepo,
+                                    onNavigateToFontSettings = { pushScreen(Screen.AppFontSettings) },
+                                    onNavigateToAbout = { pushScreen(Screen.AppAbout) },
+                                    onBack = onBackAction
+                                )
+                            }
+                            is Screen.AppFontSettings -> {
+                                com.bettershell.app.ui.screens.AppFontSettingsScreen(
+                                    prefsRepository = terminalPrefsRepo,
+                                    onBack = onBackAction
+                                )
+                            }
+                            is Screen.AppAbout -> {
+                                com.bettershell.app.ui.screens.AppAboutScreen(
                                     onBack = onBackAction
                                 )
                             }
@@ -99,6 +118,47 @@ class MainActivity : ComponentActivity() {
                                 com.bettershell.app.ui.screens.ServerSettingsScreen(
                                     server = screen.server,
                                     agentDiscoveryRepo = agentDiscoveryRepo,
+                                    onNavigateToBasic = { pushScreen(Screen.ServerBasicSettings(screen.server)) },
+                                    onNavigateToAgents = { pushScreen(Screen.ServerAgentSettings(screen.server)) },
+                                    onNavigateToStartup = { pushScreen(Screen.ServerStartupScript(screen.server)) },
+                                    onBack = onBackAction
+                                )
+                            }
+                            is Screen.ServerBasicSettings -> {
+                                com.bettershell.app.ui.screens.ServerBasicSettingsScreen(
+                                    server = screen.server,
+                                    onSaveServer = { updatedServer ->
+                                        coroutineScope.launch {
+                                            repository.updateServer(updatedServer)
+                                        }
+                                    },
+                                    onBack = onBackAction
+                                )
+                            }
+                            is Screen.ServerAgentSettings -> {
+                                com.bettershell.app.ui.screens.ServerAgentSettingsScreen(
+                                    server = screen.server,
+                                    agentDiscoveryRepo = agentDiscoveryRepo,
+                                    onNavigateToSingleAgent = { agent ->
+                                        pushScreen(Screen.SingleAgentConfig(screen.server, agent))
+                                    },
+                                    onBack = onBackAction
+                                )
+                            }
+                            is Screen.SingleAgentConfig -> {
+                                com.bettershell.app.ui.screens.SingleAgentConfigScreen(
+                                    agent = screen.agent,
+                                    onSaveAgent = { updatedAgent ->
+                                        val currentAgents = agentDiscoveryRepo.getCachedAgents(screen.server.id)
+                                        val updated = currentAgents.map { if (it.id == updatedAgent.id) updatedAgent else it }
+                                        agentDiscoveryRepo.saveAgents(screen.server.id, updated)
+                                    },
+                                    onBack = onBackAction
+                                )
+                            }
+                            is Screen.ServerStartupScript -> {
+                                com.bettershell.app.ui.screens.ServerStartupScriptScreen(
+                                    server = screen.server,
                                     onSaveServer = { updatedServer ->
                                         coroutineScope.launch {
                                             repository.updateServer(updatedServer)
@@ -131,9 +191,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // 如果当前处于子页面，包裹 PredictiveBackContainer
-                    // 底层透出渲染 screenStack 中倒数第二个页面 (真正的上一页！)
-                    // 顶层渲染当前页面，侧滑时前景向右位移与淡出，底层上一页从 -30% 平行推入，完全符合官方预览规范！
+                    // 全局预见式返回与右进右出平行转场 (针对所有路由栈页面通用！)
                     if (screenStack.size > 1) {
                         val previousScreen = screenStack[screenStack.size - 2]
                         com.bettershell.app.ui.components.PredictiveBackContainer(
@@ -163,7 +221,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     } else {
-                        // 根首页 ServerList
                         RenderScreen(screen = currentScreen, onBackAction = {})
                     }
                 }

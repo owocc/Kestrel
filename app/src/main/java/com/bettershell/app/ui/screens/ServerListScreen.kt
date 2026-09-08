@@ -71,6 +71,7 @@ import com.bettershell.app.data.TerminalPreferencesRepository
 import com.bettershell.app.ui.components.OpenAiDropdownMenu
 import com.bettershell.app.ui.components.OpenAiMenuItemData
 import com.bettershell.app.ui.theme.AccentCyan
+import com.bettershell.app.ui.components.LucideIcons
 import com.bettershell.app.ui.theme.AccentGreen
 import com.bettershell.app.ui.theme.AccentOrange
 import kotlinx.coroutines.launch
@@ -122,9 +123,10 @@ fun ServerListScreen(
                     // 右侧唯一入口：软件设置
                     IconButton(onClick = onOpenAppSettings) {
                         Icon(
-                            imageVector = Icons.Rounded.Settings,
+                            imageVector = LucideIcons.Bolt,
                             contentDescription = "软件设置",
-                            tint = MaterialTheme.colorScheme.onSurface
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 },
@@ -443,12 +445,12 @@ fun ServerCard(
                     items = listOf(
                         OpenAiMenuItemData(
                             title = "服务器设置",
-                            icon = Icons.Rounded.Settings,
+                            icon = LucideIcons.Settings,
                             onClick = onManage
                         ),
                         OpenAiMenuItemData(
                             title = "删除服务器",
-                            icon = Icons.Rounded.Delete,
+                            icon = LucideIcons.Trash2,
                             isDestructive = true,
                             onClick = onDelete
                         )
@@ -517,12 +519,12 @@ fun ServerGridCard(
                         items = listOf(
                             OpenAiMenuItemData(
                                 title = "服务器设置",
-                                icon = Icons.Rounded.Settings,
+                                icon = LucideIcons.Settings,
                                 onClick = onManage
                             ),
                             OpenAiMenuItemData(
-                                title = "删除",
-                                icon = Icons.Rounded.Delete,
+                                title = "删除服务器",
+                                icon = LucideIcons.Trash2,
                                 isDestructive = true,
                                 onClick = onDelete
                             )
