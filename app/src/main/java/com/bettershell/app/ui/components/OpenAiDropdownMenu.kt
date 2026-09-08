@@ -32,7 +32,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,17 +59,14 @@ import kotlinx.coroutines.launch
 data class OpenAiMenuItemData(
     val title: String,
     val icon: ImageVector,
-    val iconTint: Color? = null,
+    val iconTint: Color = Color.Unspecified,
     val isDestructive: Boolean = false,
     val onClick: () -> Unit
 )
 
 /**
  * Android 原生 Flip 弹出动画 & 真实系统窗口级 OnBackAnimationCallback 预见式手势收起菜单
- * 严格互锁与状态隔离：
- * 1. 【手势返回后绝不二次播放返回动画】：手势在物理上已经缩回，提交时直接落地销毁，杜绝再次触发 dismiss 动画；
- * 2. 【手势取消后绝不重新播放弹出动画】：手势放弃时，在当前手势通道内弹簧平滑吸附回 0f，绝不重新重绘或触发展开动画；
- * 3. 【出入同源 Flip】：从右上角 (1f, 0f) 锚点弹出和缩回。
+ * 解决触摸未选导致的锁定 Bug：无论何时只要 expanded 变为 false，必然重置所有手势锁并执行关闭！
  */
 @Composable
 fun OpenAiDropdownMenu(
@@ -95,9 +91,9 @@ fun OpenAiDropdownMenu(
     val gestureProgress = remember { Animatable(0f) }
     var isGestureTracking by remember { mutableStateOf(false) }
 
-    // 普通编程式关闭（点击外部或点击选项）
+    // 普通编程式关闭（点击外部、点击选项或外部状态重置）
     fun dismissWithAnimation() {
-        if (isGestureTracking) return
+        isGestureTracking = false
         scope.launch {
             animScale.animateTo(
                 targetValue = 0.75f,
@@ -116,27 +112,27 @@ fun OpenAiDropdownMenu(
 
     LaunchedEffect(expanded) {
         if (expanded) {
-            if (!isVisible) {
-                isVisible = true
-                animScale.snapTo(0.75f)
-                animAlpha.snapTo(0f)
-                scope.launch {
-                    animScale.animateTo(
-                        targetValue = 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
+            isGestureTracking = false
+            gestureProgress.snapTo(0f)
+            isVisible = true
+            animScale.snapTo(0.75f)
+            animAlpha.snapTo(0f)
+            scope.launch {
+                animScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
                     )
-                }
-                scope.launch {
-                    animAlpha.animateTo(
-                        targetValue = 1f,
-                        animationSpec = tween(durationMillis = 150)
-                    )
-                }
+                )
             }
-        } else if (isVisible && !isGestureTracking) {
+            scope.launch {
+                animAlpha.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 150)
+                )
+            }
+        } else if (isVisible) {
             dismissWithAnimation()
         }
     }
@@ -179,8 +175,6 @@ fun OpenAiDropdownMenu(
                     }
 
                     override fun onBackInvoked() {
-                        // 核心防二次重播：手势确认退出时，在手势通道内顺势完成缩小到 1.0f，然后直接静默销毁！
-                        // 绝对不调用 dismissWithAnimation()！杜绝二次播放返回动画！
                         scope.launch {
                             gestureProgress.animateTo(
                                 targetValue = 1f,
@@ -193,8 +187,6 @@ fun OpenAiDropdownMenu(
                     }
 
                     override fun onBackCancelled() {
-                        // 核心防二次弹出：手势放弃时，在当前手势通道内平滑弹簧复位到 0f，
-                        // 绝不触碰 animScale/animAlpha，绝对不重新播放弹出动画！
                         scope.launch {
                             gestureProgress.animateTo(
                                 targetValue = 0f,
@@ -215,6 +207,7 @@ fun OpenAiDropdownMenu(
 
                 onDispose {
                     dispatcher?.unregisterOnBackInvokedCallback(callback)
+                    isGestureTracking = false
                 }
             } else {
                 onDispose {}
@@ -292,42 +285,43 @@ fun OpenAiDropdownMenuItemRow(
     title: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    iconTint: Color? = null,
+    iconTint: Color = Color.Unspecified,
     isDestructive: Boolean = false,
     isDark: Boolean = isAppInDarkTheme,
     onClick: () -> Unit
 ) {
-    val defaultIconColor = if (isDark) Color(0xFFE5E7EB) else Color(0xFF262626)
-    val actualIconTint = when {
-        isDestructive -> MaterialTheme.colorScheme.error
-        iconTint != null -> iconTint
-        else -> defaultIconColor
-    }
     val textColor = when {
-        isDestructive -> MaterialTheme.colorScheme.error
-        else -> if (isDark) Color(0xFFF3F4F6) else Color(0xFF1F2937)
+        isDestructive -> Color(0xFFEF4444)
+        isDark -> Color(0xFFF3F4F6)
+        else -> Color(0xFF111827)
     }
 
-    Box(
+    val resolvedIconTint = when {
+        iconTint != Color.Unspecified -> iconTint
+        isDestructive -> Color(0xFFEF4444)
+        isDark -> Color(0xFFE5E7EB)
+        else -> Color(0xFF374151)
+    }
+
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 19.dp),
-        contentAlignment = Alignment.CenterStart
+            .clickable(onClick = onClick),
+        color = Color.Transparent
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 19.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Start
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = actualIconTint,
+                tint = resolvedIconTint,
                 modifier = Modifier.size(20.dp)
             )
-
-            Spacer(modifier = Modifier.width(14.dp))
 
             Text(
                 text = title,

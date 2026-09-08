@@ -82,16 +82,7 @@ fun AgentLogsBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.background,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        dragHandle = {
-            Surface(
-                modifier = Modifier.padding(vertical = 12.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(2.dp)
-            ) {
-                Box(modifier = Modifier.size(width = 36.dp, height = 4.dp))
-            }
-        }
+        dragHandle = null
     ) {
         val isDark = isAppInDarkTheme
         val topBorderColor = if (isDark) Color(0xFF383838) else Color(0xFFD1D5DB)
@@ -102,6 +93,20 @@ fun AgentLogsBottomSheet(
                 .bottomSheetTopBorder(strokeWidth = 1.dp, color = topBorderColor, cornerRadius = 28.dp)
                 .padding(horizontal = 16.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(2.dp)
+                ) {
+                    Box(modifier = Modifier.size(width = 36.dp, height = 4.dp))
+                }
+            }
+
             // Header Bar：居中标题，右侧保留纯文本快捷跳转
             Box(
                 modifier = Modifier

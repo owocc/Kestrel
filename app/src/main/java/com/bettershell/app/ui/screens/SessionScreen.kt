@@ -1189,15 +1189,7 @@ fun ToolsBottomSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.background,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        dragHandle = {
-            Surface(
-                modifier = Modifier.padding(vertical = 12.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(2.dp)
-            ) {
-                Box(modifier = Modifier.size(width = 36.dp, height = 4.dp))
-            }
-        }
+        dragHandle = null
     ) {
         val isDarkLocal = isAppInDarkTheme
         val topBorderColor = if (isDarkLocal) Color(0xFF383838) else Color(0xFFD1D5DB)
@@ -1209,6 +1201,19 @@ fun ToolsBottomSheet(
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(2.dp)
+                ) {
+                    Box(modifier = Modifier.size(width = 36.dp, height = 4.dp))
+                }
+            }
             // 规范化纯净居中标题，无图标，无关闭按钮
             Text(
                 text = if (draggingIndex != null) "拖拽卡片以调整顺序" else "快捷工具与指令",
@@ -1467,15 +1472,7 @@ fun SessionSwitcherSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.background,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        dragHandle = {
-            Surface(
-                modifier = Modifier.padding(vertical = 12.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(2.dp)
-            ) {
-                Box(modifier = Modifier.size(width = 36.dp, height = 4.dp))
-            }
-        }
+        dragHandle = null
     ) {
         val isDarkLocal = isAppInDarkTheme
         val topBorderColor = if (isDarkLocal) Color(0xFF383838) else Color(0xFFD1D5DB)
@@ -1486,6 +1483,19 @@ fun SessionSwitcherSheet(
                 .bottomSheetTopBorder(strokeWidth = 1.dp, color = topBorderColor, cornerRadius = 28.dp)
                 .padding(horizontal = 20.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(2.dp)
+                ) {
+                    Box(modifier = Modifier.size(width = 36.dp, height = 4.dp))
+                }
+            }
             // 规范化纯净居中标题，无图标，无关闭按钮
             Text(
                 text = "会话管理",
