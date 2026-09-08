@@ -95,12 +95,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -191,23 +194,41 @@ fun SessionScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val density = LocalDensity.current
     val imeInsets = WindowInsets.ime
-    val isKeyboardOpen by remember(imeInsets, density) {
-        derivedStateOf { imeInsets.getBottom(density) > 0 }
+    val currentImeBottomPx = imeInsets.getBottom(density)
+    val currentImeBottomDp = with(density) { currentImeBottomPx.toDp() }
+    val isKeyboardOpen by remember(currentImeBottomPx) {
+        derivedStateOf { currentImeBottomPx > 100 }
     }
 
-    val drawerHeightDp = 290.dp
-    val drawerHeightPx = with(density) { drawerHeightDp.toPx() }
+    val configuration = LocalConfiguration.current
+    val screenHeightDp = configuration.screenHeightDp.dp
+    val halfScreenHeightDp = screenHeightDp * 0.5f
 
-    val drawerAnimatable = remember { androidx.compose.animation.core.Animatable(0f) }
-    val currentDrawerHeightDp = with(density) { drawerAnimatable.value.toDp() }
-    val isDrawerOpen = drawerAnimatable.value > 10f
-
-    // Auto-hide tools drawer smoothly whenever soft keyboard appears
-    LaunchedEffect(isKeyboardOpen) {
-        if (isKeyboardOpen && drawerAnimatable.value > 0f) {
-            drawerAnimatable.animateTo(0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+    // Dynamically track user's real soft keyboard height (starts at 290dp)
+    var keyboardHeightDp by remember { mutableStateOf(290.dp) }
+    LaunchedEffect(currentImeBottomPx) {
+        if (currentImeBottomPx > 150) {
+            keyboardHeightDp = with(density) { currentImeBottomPx.toDp() }
         }
     }
+
+    var showTools by remember { mutableStateOf(false) }
+    var isExpandedHalfScreen by remember { mutableStateOf(false) }
+
+    val toolsTargetHeightDp = if (isExpandedHalfScreen) halfScreenHeightDp else keyboardHeightDp
+    val toolsHeightAnimatable = remember { androidx.compose.animation.core.Animatable(0f) }
+
+    LaunchedEffect(showTools, isExpandedHalfScreen, keyboardHeightDp) {
+        val target = if (showTools) toolsTargetHeightDp.value else 0f
+        toolsHeightAnimatable.animateTo(
+            targetValue = target,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+        )
+    }
+
+    val currentToolsHeightDp = toolsHeightAnimatable.value.dp
+    // Z-axis Overlap Math: when switching between keyboard and tools, height remains constant!
+    val bottomPlaceholderHeight = maxOf(currentImeBottomDp, currentToolsHeightDp)
 
     // Hierarchical back handling
     BackHandler(enabled = true) {
@@ -224,10 +245,9 @@ fun SessionScreen(
             isExpandedInput -> {
                 isExpandedInput = false
             }
-            isDrawerOpen -> {
-                coroutineScope.launch {
-                    drawerAnimatable.animateTo(0f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-                }
+            showTools -> {
+                showTools = false
+                isExpandedHalfScreen = false
             }
             isKeyboardOpen -> {
                 focusManager.clearFocus()
@@ -246,7 +266,6 @@ fun SessionScreen(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .navigationBarsPadding()
-            .imePadding()
     ) {
         // Layer 1: Shell & Terminal Layer (Underneath)
         Column(
@@ -440,31 +459,24 @@ fun SessionScreen(
                     GoogleMessagesInputBar(
                         text = inputText,
                         onTextChanged = { inputText = it },
-                        isToolsExpanded = isDrawerOpen,
+                        isToolsExpanded = showTools,
                         onToggleTools = {
-                            coroutineScope.launch {
-                                if (drawerAnimatable.value < 10f) {
-                                    focusManager.clearFocus()
-                                    keyboardController?.hide()
-                                    drawerAnimatable.animateTo(
-                                        targetValue = drawerHeightPx,
-                                        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
-                                    )
-                                } else {
-                                    drawerAnimatable.animateTo(
-                                        targetValue = 0f,
-                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-                                    )
+                            if (!showTools) {
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                                coroutineScope.launch {
+                                    // 0-frame handoff: instantly match keyboard height so input bar doesn't bounce/drop
+                                    toolsHeightAnimatable.snapTo(keyboardHeightDp.value)
+                                    showTools = true
                                 }
+                            } else {
+                                showTools = false
+                                isExpandedHalfScreen = false
                             }
                         },
                         onExpandInput = { isExpandedInput = true },
                         onInputFocused = {
-                            if (drawerAnimatable.value > 0f) {
-                                coroutineScope.launch {
-                                    drawerAnimatable.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
-                                }
-                            }
+                            // Seamless handoff: keyboard opens and covers tools container on Z-axis with zero drop!
                         },
                         onSend = {
                             if (inputText.isNotBlank()) {
@@ -474,58 +486,83 @@ fun SessionScreen(
                         }
                     )
 
-                    // Tools Drawer (height dynamically matches drawerAnimatable in 1:1 real time)
-                    if (currentDrawerHeightDp > 0.dp) {
+                    // Z-axis Overlap Placeholder Container
+                    if (bottomPlaceholderHeight > 0.dp) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(currentDrawerHeightDp)
+                                .height(bottomPlaceholderHeight)
                         ) {
-                            GoogleMessagesToolsDrawer(
-                                onDragDelta = { delta ->
-                                    coroutineScope.launch {
-                                        drawerAnimatable.snapTo(
-                                            (drawerAnimatable.value - delta).coerceIn(0f, drawerHeightPx)
-                                        )
-                                    }
-                                },
-                                onDragEnd = {
-                                    val current = drawerAnimatable.value
-                                    val target = if (current > drawerHeightPx / 2f) drawerHeightPx else 0f
-                                    coroutineScope.launch {
-                                        drawerAnimatable.animateTo(
-                                            targetValue = target,
-                                            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
-                                        )
-                                    }
-                                },
-                                hasStartupScript = currentServer.startupScript.isNotBlank(),
-                                onRunStartupScript = {
-                                    if (currentServer.startupScript.isNotBlank()) {
-                                        for (line in currentServer.startupScript.lines().filter { it.isNotBlank() && !it.startsWith("#") }) {
-                                            terminalSession.sendCommand(line)
+                            // Tools are positioned under the keyboard on the Z-axis
+                            if (showTools && currentToolsHeightDp > 10.dp) {
+                                val toolsAlpha = if (currentImeBottomDp > 50.dp) 0f else 1f
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .alpha(toolsAlpha)
+                                ) {
+                                    GoogleMessagesToolsDrawer(
+                                        onDragDelta = { delta ->
+                                            coroutineScope.launch {
+                                                val maxPx = with(density) { halfScreenHeightDp.toPx() }
+                                                val currentPx = with(density) { toolsHeightAnimatable.value.dp.toPx() }
+                                                val newPx = (currentPx - delta).coerceIn(0f, maxPx)
+                                                toolsHeightAnimatable.snapTo(with(density) { newPx.toDp().value })
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            val currentDp = toolsHeightAnimatable.value.dp
+                                            val defaultDp = keyboardHeightDp
+                                            val target = when {
+                                                currentDp > (defaultDp + halfScreenHeightDp) / 2f -> {
+                                                    isExpandedHalfScreen = true
+                                                    showTools = true
+                                                    halfScreenHeightDp.value
+                                                }
+                                                currentDp > defaultDp / 2f -> {
+                                                    isExpandedHalfScreen = false
+                                                    showTools = true
+                                                    defaultDp.value
+                                                }
+                                                else -> {
+                                                    isExpandedHalfScreen = false
+                                                    showTools = false
+                                                    0f
+                                                }
+                                            }
+                                            coroutineScope.launch {
+                                                toolsHeightAnimatable.animateTo(
+                                                    targetValue = target,
+                                                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                                                )
+                                            }
+                                        },
+                                        onToggleExpand = {
+                                            isExpandedHalfScreen = !isExpandedHalfScreen
+                                        },
+                                        hasStartupScript = currentServer.startupScript.isNotBlank(),
+                                        onRunStartupScript = {
+                                            if (currentServer.startupScript.isNotBlank()) {
+                                                for (line in currentServer.startupScript.lines().filter { it.isNotBlank() && !it.startsWith("#") }) {
+                                                    terminalSession.sendCommand(line)
+                                                }
+                                            }
+                                            showTools = false
+                                        },
+                                        onInsertCommand = { cmd ->
+                                            inputText = cmd
+                                            showTools = false
+                                        },
+                                        onInsertSymbol = { sym ->
+                                            inputText += sym
+                                        },
+                                        onClearTerminal = {
+                                            terminalSession.clearScreen()
+                                            showTools = false
                                         }
-                                    }
-                                    coroutineScope.launch {
-                                        drawerAnimatable.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
-                                    }
-                                },
-                                onInsertCommand = { cmd ->
-                                    inputText = cmd
-                                    coroutineScope.launch {
-                                        drawerAnimatable.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
-                                    }
-                                },
-                                onInsertSymbol = { sym ->
-                                    inputText += sym
-                                },
-                                onClearTerminal = {
-                                    terminalSession.clearScreen()
-                                    coroutineScope.launch {
-                                        drawerAnimatable.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
-                                    }
+                                    )
                                 }
-                            )
+                            }
                         }
                     }
                 }
@@ -1036,6 +1073,7 @@ data class ToolItemData(
 fun GoogleMessagesToolsDrawer(
     onDragDelta: (Float) -> Unit,
     onDragEnd: () -> Unit,
+    onToggleExpand: () -> Unit,
     hasStartupScript: Boolean,
     onRunStartupScript: () -> Unit,
     onInsertCommand: (String) -> Unit,
@@ -1101,7 +1139,7 @@ fun GoogleMessagesToolsDrawer(
                     Spacer(modifier = Modifier.width(60.dp))
                 }
 
-                // Center Drag Handle (touch to pull down or close drawer)
+                // Center Drag Handle (touch to drag down, click to toggle 1/2 screen height)
                 Box(
                     modifier = Modifier
                         .pointerInput(Unit) {
@@ -1110,15 +1148,16 @@ fun GoogleMessagesToolsDrawer(
                                 onDragEnd = { onDragEnd() }
                             )
                         }
-                        .padding(vertical = 4.dp),
+                        .clickable(onClick = onToggleExpand)
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
-                            .width(40.dp)
+                            .width(44.dp)
                             .height(5.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f))
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                     )
                 }
 
