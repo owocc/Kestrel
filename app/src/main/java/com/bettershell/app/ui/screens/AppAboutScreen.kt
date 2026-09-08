@@ -53,22 +53,22 @@ fun AppAboutScreen(
             ) {
                 // 第一个卡片：顶部大圆角，底部小圆角
                 OpenAiSettingRow(
-                    title = "BetterShell",
-                    subtitle = "版本: 1.0 (Android 16 Ready)",
+                    title = com.bettershell.app.AppConstants.APP_NAME,
+                    subtitle = com.bettershell.app.AppConstants.APP_VERSION_LABEL,
                     position = CardPosition.TOP
                 )
 
                 // 中间卡片：全小圆角
                 OpenAiSettingRow(
                     title = "核心引擎",
-                    subtitle = "omp (Oh My Pi) & Multica 多 Agent 架构",
+                    subtitle = com.bettershell.app.AppConstants.CORE_ENGINE_INFO,
                     position = CardPosition.MIDDLE
                 )
 
                 // 最后一个卡片：顶部小圆角，底部大圆角
                 OpenAiSettingRow(
                     title = "开源协议",
-                    subtitle = "Apache License 2.0",
+                    subtitle = com.bettershell.app.AppConstants.OPEN_SOURCE_LICENSE,
                     position = CardPosition.BOTTOM
                 )
             }

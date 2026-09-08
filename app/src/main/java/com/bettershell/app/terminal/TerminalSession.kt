@@ -80,7 +80,7 @@ class TerminalSession(
         }
 
         _connectionState.value = ConnectionState.Connecting
-        appendOutput("\u001B[90m[BetterShell] Connecting to ${server.name} (${server.host}:${server.port})...\u001B[0m\n")
+        appendOutput("\u001B[90m[${com.bettershell.app.AppConstants.APP_NAME}] Connecting to ${server.name} (${server.host}:${server.port})...\u001B[0m\n")
 
         if (server.isMock || server.authType == AuthType.DEMO_MOCK) {
             connectMock()
@@ -95,7 +95,7 @@ class TerminalSession(
             _connectionState.value = ConnectionState.Connected
             appendOutput("\u001B[32m✔ Connected to Agent Environment (mock-agent-1)\u001B[0m\n")
             appendOutput("\u001B[36m╭────────────────────────────────────────────────────────────╮\u001B[0m\n")
-            appendOutput("\u001B[36m│\u001B[0m  \u001B[1;37mBetterShell Agent Runtime v1.0\u001B[0m                            \u001B[36m│\u001B[0m\n")
+            appendOutput("\u001B[36m│\u001B[0m  \u001B[1;37m${com.bettershell.app.AppConstants.APP_NAME} Agent Runtime v1.0\u001B[0m                            \u001B[36m│\u001B[0m\n")
             appendOutput("\u001B[36m│\u001B[0m  Linux 6.8.0-agent-arm64 #1 SMP PREEMPT                     \u001B[36m│\u001B[0m\n")
             appendOutput("\u001B[36m│\u001B[0m  Optimized for Mobile Agent Control                         \u001B[36m│\u001B[0m\n")
             appendOutput("\u001B[36m╰────────────────────────────────────────────────────────────╯\u001B[0m\n\n")
@@ -293,7 +293,7 @@ class TerminalSession(
             "cat" -> {
                 val file = parts.getOrNull(1)
                 if (file == "README.md") {
-                    appendOutput("# BetterShell Agent Node\nDesigned for frictionless mobile control of CLI tools and agent instances.\n")
+                    appendOutput("# ${com.bettershell.app.AppConstants.APP_NAME} Agent Node\nDesigned for frictionless mobile control of CLI tools and agent instances.\n")
                 } else if (file != null) {
                     appendOutput("Contents of $file [Sample file data]\n")
                 } else {

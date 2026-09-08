@@ -115,7 +115,7 @@ fun ServerListScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "BetterShell",
+                        text = com.bettershell.app.AppConstants.APP_NAME,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface

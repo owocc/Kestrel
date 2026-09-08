@@ -113,8 +113,8 @@ fun AppSettingsScreen(
                 headerTitle = "关于"
             ) {
                 OpenAiSettingRow(
-                    title = "BetterShell",
-                    subtitle = "版本 1.0 (Android 16 Ready)",
+                    title = com.bettershell.app.AppConstants.APP_NAME,
+                    subtitle = com.bettershell.app.AppConstants.APP_VERSION_LABEL,
                     icon = LucideIcons.Bolt,
                     showChevron = true,
                     position = CardPosition.SINGLE,
