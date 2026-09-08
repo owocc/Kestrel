@@ -381,8 +381,9 @@ fun ServerCard(
                         // 绘制向右侧渐变至透明的遮罩 (从左向右淡出)
                         val maskBrush = Brush.horizontalGradient(
                             0.0f to Color.White,
-                            0.35f to Color.White.copy(alpha = 0.5f),
-                            0.75f to Color.Transparent,
+                            0.50f to Color.White.copy(alpha = 0.85f),
+                            0.75f to Color.White.copy(alpha = 0.40f),
+                            0.95f to Color.Transparent,
                             1.0f to Color.Transparent,
                             startX = 0f,
                             endX = size.width
@@ -396,12 +397,12 @@ fun ServerCard(
                 Icon(
                     imageVector = if (server.isMock) LucideIcons.Bot else LucideIcons.Terminal,
                     contentDescription = null,
-                    // 图标颜色为字体色 (透明度适中，营造极其精致的水印/雕刻光影质感)
-                    tint = titleColor.copy(alpha = if (isDark) 0.16f else 0.12f),
+                    // 图标颜色为字体色，提高可见度
+                    tint = titleColor.copy(alpha = if (isDark) 0.35f else 0.28f),
                     modifier = Modifier
                         .size(80.dp)
                         .align(Alignment.BottomStart)
-                        .offset(x = (-12).dp, y = 16.dp) // 固定在左下角并微微露出底边
+                        .offset(x = 10.dp, y = 6.dp) // 进入画面更多，清晰可见
                         .rotate(25f) // 25度旋转
                 )
             }
@@ -518,8 +519,9 @@ fun ServerGridCard(
                         drawContent()
                         val maskBrush = Brush.horizontalGradient(
                             0.0f to Color.White,
-                            0.40f to Color.White.copy(alpha = 0.5f),
-                            0.80f to Color.Transparent,
+                            0.50f to Color.White.copy(alpha = 0.85f),
+                            0.75f to Color.White.copy(alpha = 0.40f),
+                            0.95f to Color.Transparent,
                             1.0f to Color.Transparent,
                             startX = 0f,
                             endX = size.width
@@ -533,11 +535,11 @@ fun ServerGridCard(
                 Icon(
                     imageVector = if (server.isMock) LucideIcons.Bot else LucideIcons.Terminal,
                     contentDescription = null,
-                    tint = titleColor.copy(alpha = if (isDark) 0.16f else 0.12f),
+                    tint = titleColor.copy(alpha = if (isDark) 0.35f else 0.28f),
                     modifier = Modifier
-                        .size(88.dp)
+                        .size(86.dp)
                         .align(Alignment.BottomStart)
-                        .offset(x = (-12).dp, y = 18.dp)
+                        .offset(x = 10.dp, y = 6.dp) // 进入画面更多，清晰可见
                         .rotate(25f)
                 )
             }
