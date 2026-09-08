@@ -58,7 +58,7 @@ fun AcknowledgementsScreen(
             ) {
                 OpenAiSettingRow(
                     title = "哈吉米 (Gemini)",
-                    subtitle = "最默契可靠的 AI 结对编程伙伴与首席架构搭子。从最初的终端重构、卡片微光描边，到全套图标体系与 Android 16 预见式交互——无论何时抛出想法，总是全情投入、秒懂心意地帮你将每一处极致灵感稳稳落地。超开心能与你并肩完成这趟酷炫的 Vibe Coding 之旅！",
+                    subtitle = "随叫随到的 AI 结对编程搭子，负责秒懂你的奇思妙想，把每一处灵感利索敲成代码！",
                     position = CardPosition.TOP,
                     isDark = isDark
                 )
