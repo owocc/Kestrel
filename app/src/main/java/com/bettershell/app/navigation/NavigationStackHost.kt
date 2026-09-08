@@ -40,14 +40,7 @@ private class NavigationLayer<T>(
 )
 
 /**
- * 真正单向、无竞争、绝对零闪烁的物理分层导航容器 (Rock-Solid Multi-Layer Navigation Host)
- *
- * 彻底理顺的逻辑链条：
- * 1. 【单向数据流与状态独占】：手势中（isGestureActive）由手势 Animatable 独占驱动；非手势由各图层独立 Animatable 驱动。两者绝不交叉干扰；
- * 2. 【手势提交 (Commit)】：手势流触发完成时，使用 suspend 动画顺滑推进到 1.0f（完全滑出可视区），落地后再调用 onPop() 出栈并静默清理图层，绝不触发任何进入动画；
- * 3. 【手势取消 (Cancel)】：放弃返回时，使用 suspend 动画平滑弹簧复位到 0.0f，复位彻底完成后才退出手势状态，上一页绝不重新播放进入；
- * 4. 【压栈进入新页面 (Push)】：新页面自 1.0f 平滑滑入到 0.0f，上一个页面增加暗化遮罩；
- * 5. 【点击返回按钮退出 (Pop)】：顶层页面自 0.0f 平滑滑出到 1.0f，完全离开视口后销毁。
+ * 严格顺序闭环、彻底消灭退栈重播的导航容器
  */
 @Composable
 fun <T : Any> NavigationStackHost(
@@ -57,15 +50,12 @@ fun <T : Any> NavigationStackHost(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    // 真实维护的图层树
     val layers = remember { mutableStateListOf<NavigationLayer<T>>() }
     var previousStackSnapshot by remember { mutableStateOf<List<T>>(emptyList()) }
 
-    // 手势驱动的物理参数
     val gestureProgress = remember { Animatable(0f) }
     var isGestureActive by remember { mutableStateOf(false) }
 
-    // 监听外部路由栈推入/弹出
     LaunchedEffect(stack) {
         if (layers.isEmpty()) {
             stack.forEach { s ->
@@ -123,7 +113,7 @@ fun <T : Any> NavigationStackHost(
             }
 
             if (isGestureActive) {
-                // 手势已经在物理上滑至 1.0f（屏幕外），直接静默清理
+                // 手势提交时已经在物理滑出后静默移除，无需再做任何处理
                 layers.removeAll(poppedLayers)
             } else {
                 // 点击返回按钮：以动画滑出屏幕外后移除
@@ -143,7 +133,6 @@ fun <T : Any> NavigationStackHost(
 
     val canBack = stack.size > 1
 
-    // 核心拦截系统预见式返回手势
     PredictiveBackHandler(enabled = canBack) { progressFlow: Flow<BackEventCompat> ->
         isGestureActive = true
         try {
@@ -151,18 +140,27 @@ fun <T : Any> NavigationStackHost(
                 val eased = FastOutSlowInEasing.transform(event.progress)
                 gestureProgress.snapTo(eased)
             }
-            // 【手势提交 Commit】：顺序等待平滑动画到 100%（滑出屏幕外）
+            // 【手势提交 Commit】
+            // 步骤 1：先顺着手势滑出到 1.0f（屏幕最右侧完全离开可视区）
             gestureProgress.animateTo(
                 targetValue = 1.0f,
                 animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)
             )
-            onPop()
+
+            // 步骤 2【核心排查的关键点】：
+            // 在手势完全滑出屏幕后、并且在重置 gestureProgress 之前，直接从 layers 中把被退出的顶层页面移除！
+            // 绝不给它在 gestureProgress 复位到 0f 时露出屏幕的机会！
+            if (layers.size > 1) {
+                layers.removeAt(layers.size - 1)
+            }
+            // 步骤 3：重置手势偏移并解除手势独占锁
             gestureProgress.snapTo(0f)
             isGestureActive = false
+
+            // 步骤 4：通知外部出栈（此时顶层图层早已物理销毁，绝对没有任何重播可能）
+            onPop()
         } catch (e: CancellationException) {
-            // 【手势取消 Cancel】：顺序等待物理回弹完全落地到 0f
-            // 关键：在当前 suspend 挂起块内顺序执行，直到动画完全归零才重置 isGestureActive，
-            // 绝不触发任何外层中间态，彻底消灭“上一页闪一下进入”！
+            // 【手势取消 Cancel】
             gestureProgress.animateTo(
                 targetValue = 0f,
                 animationSpec = spring(
@@ -187,9 +185,6 @@ fun <T : Any> NavigationStackHost(
                 val isTop = index == totalLayers - 1
                 val isPrevious = index == totalLayers - 2
 
-                // 物理位移与遮罩计算：
-                // 1. 手势活跃时：由 gestureProgress 绝对独占驱动顶层和上一层，底层完全静止；
-                // 2. 非手势时：各页面遵循自身 translationFraction / dimAlpha，互不干扰。
                 val transFraction = when {
                     isGestureActive && isTop -> currentGesture
                     isGestureActive && isPrevious -> -0.30f * (1f - currentGesture)
