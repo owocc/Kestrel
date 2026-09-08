@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
 
         val repository = ServerRepository(applicationContext)
         val terminalPrefsRepo = com.bettershell.app.data.TerminalPreferencesRepository(applicationContext)
-
+        val sessionManager = com.bettershell.app.terminal.SessionManager()
         setContent {
             BetterShellTheme {
                 Surface(
@@ -56,12 +56,10 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             is Screen.Session -> {
-                                BackHandler {
-                                    currentScreen = Screen.ServerList
-                                }
                                 SessionScreen(
                                     server = screen.server,
                                     repository = repository,
+                                    sessionManager = sessionManager,
                                     prefsRepository = terminalPrefsRepo,
                                     onBack = {
                                         currentScreen = Screen.ServerList

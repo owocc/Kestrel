@@ -1,11 +1,9 @@
 package com.bettershell.app.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,22 +11,19 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,36 +36,38 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.automirrored.rounded.WrapText
-import androidx.compose.material.icons.rounded.ArrowDownward
-import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloseFullscreen
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FontDownload
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.OpenInFull
-import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,22 +79,40 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.data.ServerRepository
 import com.bettershell.app.data.TerminalFont
-import com.bettershell.app.data.TerminalPreferences
 import com.bettershell.app.data.TerminalPreferencesRepository
-import com.bettershell.app.terminal.AnsiParser
 import com.bettershell.app.terminal.ConnectionState
-import com.bettershell.app.terminal.TerminalSession
-import com.bettershell.app.ui.theme.*
+import com.bettershell.app.terminal.ServerSessionItem
+import com.bettershell.app.terminal.SessionManager
+import com.bettershell.app.ui.theme.AccentCyan
+import com.bettershell.app.ui.theme.AccentGreen
+import com.bettershell.app.ui.theme.AccentOrange
+import com.bettershell.app.ui.theme.AccentRed
+import com.bettershell.app.ui.theme.DarkOnSurface
+import com.bettershell.app.ui.theme.DarkOnSurfaceVariant
+import com.bettershell.app.ui.theme.DarkOutline
+import com.bettershell.app.ui.theme.DarkPrimary
+import com.bettershell.app.ui.theme.DarkSurface
+import com.bettershell.app.ui.theme.DarkSurfaceVariant
+import com.bettershell.app.ui.theme.InputDivider
+import com.bettershell.app.ui.theme.InputPanelSurface
+import com.bettershell.app.ui.theme.InputPanelWhite
+import com.bettershell.app.ui.theme.InputTextDark
+import com.bettershell.app.ui.theme.InputTextSecondary
+import com.bettershell.app.ui.theme.TerminalBlack
+import com.bettershell.app.ui.theme.TerminalCardBg
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,37 +120,70 @@ import kotlinx.coroutines.launch
 fun SessionScreen(
     server: ServerConfig,
     repository: ServerRepository,
+    sessionManager: SessionManager,
     prefsRepository: TerminalPreferencesRepository,
     onBack: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val terminalPrefs by prefsRepository.preferences.collectAsState()
     var currentServer by remember { mutableStateOf(server) }
 
-    val session = remember(currentServer.id) {
-        TerminalSession(currentServer, coroutineScope)
+    // Multi-session state observation
+    val sessionsMap by sessionManager.sessionsMap.collectAsState()
+    val activeSessionMap by sessionManager.activeSessionMap.collectAsState()
+
+    val serverSessions = remember(sessionsMap, currentServer.id) {
+        sessionsMap[currentServer.id] ?: emptyList()
     }
 
-    DisposableEffect(session) {
-        onDispose {
-            session.disconnect()
-        }
+    // Ensure at least one initial session exists
+    val activeSessionItem = remember(serverSessions, activeSessionMap, currentServer.id) {
+        sessionManager.getActiveSession(currentServer.id)
+            ?: sessionManager.getOrCreateInitialSession(currentServer)
     }
 
-    val connectionState by session.connectionState.collectAsState()
-    val rawOutput by session.rawOutput.collectAsState()
-    val history by session.history.collectAsState()
+    val terminalSession = activeSessionItem.terminalSession
+    val connectionState by terminalSession.connectionState.collectAsState()
+    val annotatedOutput by terminalSession.annotatedOutput.collectAsState()
+    val terminalPrefs by prefsRepository.preferences.collectAsState()
 
     var inputText by remember { mutableStateOf("") }
     var isExpanded by remember { mutableStateOf(false) }
     var showServerSettingsSheet by remember { mutableStateOf(false) }
+    var showSessionSwitcherSheet by remember { mutableStateOf(false) }
+    var sessionToRename by remember { mutableStateOf<ServerSessionItem?>(null) }
 
-    val listState = rememberLazyListState()
+    // Keyboard & Back Gesture management
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val density = LocalDensity.current
+    val imeInsets = WindowInsets.ime
+    val isKeyboardOpen by remember(imeInsets, density) {
+        derivedStateOf { imeInsets.getBottom(density) > 0 }
+    }
 
-    // Auto-scroll to bottom on output change
-    LaunchedEffect(rawOutput) {
-        if (rawOutput.isNotBlank()) {
-            listState.animateScrollToItem(0)
+    // Hierarchical back handling: closes modals/keyboard before navigating away
+    BackHandler(enabled = true) {
+        when {
+            sessionToRename != null -> {
+                sessionToRename = null
+            }
+            showSessionSwitcherSheet -> {
+                showSessionSwitcherSheet = false
+            }
+            showServerSettingsSheet -> {
+                showServerSettingsSheet = false
+            }
+            isExpanded -> {
+                isExpanded = false
+            }
+            isKeyboardOpen -> {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+            }
+            else -> {
+                // Return to server list; sessions remain preserved and running!
+                onBack()
+            }
         }
     }
 
@@ -150,34 +198,36 @@ fun SessionScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Top Navigation & Status Bar
+            // Top Navigation & Status Bar with Session Switching
             SessionTopBar(
                 server = currentServer,
+                activeSession = activeSessionItem,
                 connectionState = connectionState,
                 softWrap = terminalPrefs.softWrap,
                 onToggleSoftWrap = { prefsRepository.toggleSoftWrap() },
-                onBack = onBack,
-                onReconnect = { session.connect() },
-                onClear = { session.clearScreen() },
+                onBack = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                    onBack()
+                },
+                onTitleClick = { showSessionSwitcherSheet = true },
+                onReconnect = { terminalSession.connect() },
+                onClear = { terminalSession.clearScreen() },
                 onOpenSettings = { showServerSettingsSheet = true }
             )
 
-            // Terminal View Area (dark background with ANSI parsed monospace text)
+            // Virtual Terminal View Area (VT Buffer with in-place line rewrite and 2D scroll)
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
                 SelectionContainer {
-                    val annotatedOutput = remember(rawOutput) {
-                        AnsiParser.parse(rawOutput)
-                    }
-
                     val verticalScrollState = rememberScrollState()
                     val horizontalScrollState = rememberScrollState()
 
-                    LaunchedEffect(rawOutput) {
+                    LaunchedEffect(annotatedOutput) {
                         verticalScrollState.animateScrollTo(verticalScrollState.maxValue)
                     }
 
@@ -206,11 +256,11 @@ fun SessionScreen(
 
             // Quick Shortcut Bar (ESC, TAB, CTRL-C, CTRL-D, Arrows)
             QuickShortcutBar(
-                onSendRaw = { session.sendRaw(it) },
+                onSendRaw = { terminalSession.sendRaw(it) },
                 onInsertText = { inputText += it }
             )
 
-            // Expandable Bottom Input Panel (Exact match to Image #1)
+            // Expandable Bottom Input Panel
             ExpandableInputPanel(
                 text = inputText,
                 onTextChanged = { inputText = it },
@@ -218,7 +268,7 @@ fun SessionScreen(
                 onToggleExpand = { isExpanded = !isExpanded },
                 onSend = {
                     if (inputText.isNotBlank()) {
-                        session.sendCommand(inputText)
+                        terminalSession.sendCommand(inputText)
                         inputText = ""
                     }
                 },
@@ -228,7 +278,7 @@ fun SessionScreen(
                 onRunStartupScript = {
                     if (currentServer.startupScript.isNotBlank()) {
                         for (line in currentServer.startupScript.lines().filter { it.isNotBlank() && !it.startsWith("#") }) {
-                            session.sendCommand(line)
+                            terminalSession.sendCommand(line)
                         }
                     }
                 },
@@ -237,7 +287,46 @@ fun SessionScreen(
         }
     }
 
-    // Server Settings Sheet (Configure startup script & options dynamically)
+    // Session Switcher Bottom Sheet
+    if (showSessionSwitcherSheet) {
+        SessionSwitcherSheet(
+            server = currentServer,
+            sessions = serverSessions,
+            activeSessionId = activeSessionItem.id,
+            onSelectSession = { sessionId ->
+                sessionManager.setActiveSession(currentServer.id, sessionId)
+                showSessionSwitcherSheet = false
+            },
+            onNewSession = {
+                sessionManager.createSession(currentServer)
+                showSessionSwitcherSheet = false
+            },
+            onRenameRequest = { sessionItem ->
+                sessionToRename = sessionItem
+            },
+            onCloseSession = { sessionId ->
+                sessionManager.closeSession(currentServer.id, sessionId)
+                if (serverSessions.size <= 1) {
+                    showSessionSwitcherSheet = false
+                }
+            },
+            onDismiss = { showSessionSwitcherSheet = false }
+        )
+    }
+
+    // Rename Session Dialog
+    if (sessionToRename != null) {
+        RenameSessionDialog(
+            currentTitle = sessionToRename!!.title,
+            onDismiss = { sessionToRename = null },
+            onSave = { newTitle ->
+                sessionManager.renameSession(currentServer.id, sessionToRename!!.id, newTitle)
+                sessionToRename = null
+            }
+        )
+    }
+
+    // Server Settings Sheet (Font, Display & Startup Script)
     if (showServerSettingsSheet) {
         ServerSettingsSheet(
             server = currentServer,
@@ -257,10 +346,12 @@ fun SessionScreen(
 @Composable
 fun SessionTopBar(
     server: ServerConfig,
+    activeSession: ServerSessionItem,
     connectionState: ConnectionState,
     softWrap: Boolean,
     onToggleSoftWrap: () -> Unit,
     onBack: () -> Unit,
+    onTitleClick: () -> Unit,
     onReconnect: () -> Unit,
     onClear: () -> Unit,
     onOpenSettings: () -> Unit
@@ -274,10 +365,10 @@ fun SessionTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Left: Back button & Server Info
+        // Left: Back button & Server / Session Info (Clickable for session switcher)
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.weight(1f)
         ) {
             IconButton(onClick = onBack) {
@@ -288,22 +379,34 @@ fun SessionTopBar(
                 )
             }
 
-            Column {
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onTitleClick)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = server.name,
+                        text = "${server.name} · ${activeSession.title}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = DarkOnSurface,
                         maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
 
-                    // Connection Dot Status
+                    Icon(
+                        imageVector = Icons.Rounded.KeyboardArrowDown,
+                        contentDescription = "Switch Sessions",
+                        tint = DarkOnSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+
+                    // Connection Status Pill
                     val (dotColor, statusText) = when (connectionState) {
                         is ConnectionState.Connected -> AccentGreen to "已连接"
                         is ConnectionState.Connecting -> AccentOrange to "连接中"
@@ -357,6 +460,7 @@ fun SessionTopBar(
                     tint = if (softWrap) AccentGreen else DarkOnSurfaceVariant
                 )
             }
+
             if (connectionState is ConnectionState.Disconnected || connectionState is ConnectionState.Error) {
                 IconButton(onClick = onReconnect) {
                     Icon(
@@ -384,6 +488,261 @@ fun SessionTopBar(
             }
         }
     }
+}
+
+/**
+ * Session Switcher Bottom Sheet
+ * Supports multiple active sessions per server, creating new ones, switching, and renaming
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SessionSwitcherSheet(
+    server: ServerConfig,
+    sessions: List<ServerSessionItem>,
+    activeSessionId: String,
+    onSelectSession: (String) -> Unit,
+    onNewSession: () -> Unit,
+    onRenameRequest: (ServerSessionItem) -> Unit,
+    onCloseSession: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = DarkSurface,
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 12.dp)
+                    .width(40.dp)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(DarkOutline)
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "会话管理 (Sessions)",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = DarkOnSurface
+                    )
+                    Text(
+                        text = "${server.name} · 已保持 ${sessions.size} 个后台会话",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DarkOnSurfaceVariant
+                    )
+                }
+
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Rounded.Close, "Close", tint = DarkOnSurfaceVariant)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Session List
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                sessions.forEach { sessionItem ->
+                    val isActive = sessionItem.id == activeSessionId
+                    val connState by sessionItem.terminalSession.connectionState.collectAsState()
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .border(
+                                1.dp,
+                                if (isActive) AccentGreen else DarkOutline,
+                                RoundedCornerShape(14.dp)
+                            )
+                            .clickable { onSelectSession(sessionItem.id) },
+                        color = if (isActive) TerminalCardBg else DarkSurfaceVariant
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = if (isActive) Icons.Rounded.CheckCircle else Icons.Rounded.Terminal,
+                                    contentDescription = null,
+                                    tint = if (isActive) AccentGreen else DarkOnSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+
+                                Column {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = sessionItem.title,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                            color = DarkOnSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (isActive) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(AccentGreen.copy(alpha = 0.2f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = "当前",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = AccentGreen
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Text(
+                                        text = when (connState) {
+                                            is ConnectionState.Connected -> "● 在线运行中"
+                                            is ConnectionState.Connecting -> "● 连接中..."
+                                            else -> "○ 未连接"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (connState is ConnectionState.Connected) AccentGreen else DarkOnSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            // Actions per session: Rename & Close
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                IconButton(onClick = { onRenameRequest(sessionItem) }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Edit,
+                                        contentDescription = "重命名会话",
+                                        tint = DarkOnSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+
+                                if (sessions.size > 1) {
+                                    IconButton(onClick = { onCloseSession(sessionItem.id) }) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = "关闭会话",
+                                            tint = AccentRed.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // + New Session Button
+            Button(
+                onClick = onNewSession,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = DarkPrimary,
+                    contentColor = Color(0xFF111827)
+                )
+            ) {
+                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("新建终端会话 (+ New Session)", fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+fun RenameSessionDialog(
+    currentTitle: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var title by remember { mutableStateOf(currentTitle) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("修改会话标题", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = DarkOnSurface)
+        },
+        text = {
+            Column {
+                Text(
+                    text = "为该终端会话设置自定义标题（留空将继续自动跟随终端内的程序名称）：",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = DarkOnSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("会话标题") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = TerminalCardBg,
+                        unfocusedContainerColor = TerminalCardBg,
+                        focusedBorderColor = DarkPrimary,
+                        unfocusedBorderColor = DarkOutline,
+                        focusedTextColor = DarkOnSurface,
+                        unfocusedTextColor = DarkOnSurface
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(title.trim()) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = DarkPrimary,
+                    contentColor = Color(0xFF111827)
+                )
+            ) {
+                Text("保存", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("取消", color = DarkOnSurfaceVariant)
+            }
+        },
+        containerColor = DarkSurface,
+        shape = RoundedCornerShape(20.dp)
+    )
 }
 
 @Composable
@@ -438,12 +797,6 @@ fun QuickKeyChip(
     }
 }
 
-/**
- * Expandable Input Panel
- * Strictly replicates Image #1:
- * - Collapsed: Floating rounded white card/pill at the bottom.
- * - Expanded: High white surface card with rounded top corners, large multi-line textarea, character counter, agent quick prompts, and action buttons.
- */
 @Composable
 fun ExpandableInputPanel(
     text: String,
@@ -496,7 +849,6 @@ fun ExpandableInputPanel(
             modifier = Modifier.fillMaxSize()
         ) {
             if (isExpanded) {
-                // Expanded View Header & Content
                 ExpandedPanelContent(
                     text = text,
                     onTextChanged = onTextChanged,
@@ -507,7 +859,6 @@ fun ExpandableInputPanel(
                     hasStartupScript = hasStartupScript
                 )
             } else {
-                // Collapsed View (Single sleek horizontal row as in Image #1 left)
                 CollapsedPanelContent(
                     text = text,
                     onTextChanged = onTextChanged,
@@ -533,7 +884,6 @@ fun CollapsedPanelContent(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Expand icon button
         Box(
             modifier = Modifier
                 .size(38.dp)
@@ -550,7 +900,6 @@ fun CollapsedPanelContent(
             )
         }
 
-        // Input Text Field
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -587,7 +936,6 @@ fun CollapsedPanelContent(
             )
         }
 
-        // Send Button
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -621,7 +969,6 @@ fun ExpandedPanelContent(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Top Drag Handle & Controls
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -654,7 +1001,6 @@ fun ExpandedPanelContent(
                 )
             }
 
-            // Collapse Button
             Box(
                 modifier = Modifier
                     .size(36.dp)
@@ -674,7 +1020,6 @@ fun ExpandedPanelContent(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Quick Prompt Templates
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -698,7 +1043,6 @@ fun ExpandedPanelContent(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Large Multi-line Editor
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -735,13 +1079,11 @@ fun ExpandedPanelContent(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Bottom Action Bar inside expanded panel
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Text count & Clear
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -765,7 +1107,6 @@ fun ExpandedPanelContent(
                 }
             }
 
-            // Prominent Send Button
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -834,7 +1175,7 @@ fun PromptChip(
 
 /**
  * Server Settings Modal Sheet
- * Allows editing startup script and inspecting server details during live session
+ * Display, Font & Startup Script settings
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -846,6 +1187,7 @@ fun ServerSettingsSheet(
 ) {
     val terminalPrefs by prefsRepository.preferences.collectAsState()
     var startupScript by remember { mutableStateOf(server.startupScript) }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = DarkSurface,
@@ -890,6 +1232,8 @@ fun ServerSettingsSheet(
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 color = DarkOnSurfaceVariant
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Section 1: Terminal Display & Font Settings
             Row(
@@ -1102,7 +1446,7 @@ fun ServerSettingsSheet(
                     .fillMaxWidth()
                     .height(180.dp),
                 textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = TerminalCardBg,
                     unfocusedContainerColor = TerminalCardBg,
                     focusedBorderColor = DarkPrimary,
@@ -1121,7 +1465,7 @@ fun ServerSettingsSheet(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                androidx.compose.material3.OutlinedButton(
+                OutlinedButton(
                     onClick = onDismiss,
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -1130,12 +1474,12 @@ fun ServerSettingsSheet(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                androidx.compose.material3.Button(
+                Button(
                     onClick = {
                         onSave(server.copy(startupScript = startupScript))
                     },
                     shape = RoundedCornerShape(12.dp),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    colors = ButtonDefaults.buttonColors(
                         containerColor = DarkPrimary,
                         contentColor = Color(0xFF111827)
                     )

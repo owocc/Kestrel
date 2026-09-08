@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
+import androidx.compose.ui.text.AnnotatedString
 
 sealed class ConnectionState {
     object Disconnected : ConnectionState()
@@ -40,9 +41,18 @@ class TerminalSession(
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    private val _rawOutput = MutableStateFlow("")
-    val rawOutput: StateFlow<String> = _rawOutput.asStateFlow()
+    private val _windowTitle = MutableStateFlow("")
+    val windowTitle: StateFlow<String> = _windowTitle.asStateFlow()
 
+    private val screenBuffer = TerminalScreenBuffer(
+        maxScrollback = 3000,
+        onTitleChanged = { title ->
+            _windowTitle.value = title
+        }
+    )
+
+    private val _annotatedOutput = MutableStateFlow(AnnotatedString(""))
+    val annotatedOutput: StateFlow<AnnotatedString> = _annotatedOutput.asStateFlow()
     private val _history = MutableStateFlow<List<String>>(emptyList())
     val history: StateFlow<List<String>> = _history.asStateFlow()
 
@@ -224,18 +234,13 @@ class TerminalSession(
     }
 
     fun clearScreen() {
-        _rawOutput.value = "\u001B[1;32magent@better-shell\u001B[0m:\u001B[1;34m~\u001B[0m$ "
+        screenBuffer.clear()
+        _annotatedOutput.value = screenBuffer.toAnnotatedString()
     }
 
     private fun appendOutput(text: String) {
-        // Keep output buffer bounded to avoid memory exhaustion on long sessions
-        val current = _rawOutput.value
-        val updated = current + text
-        _rawOutput.value = if (updated.length > 100_000) {
-            updated.takeLast(80_000)
-        } else {
-            updated
-        }
+        screenBuffer.processBytes(text)
+        _annotatedOutput.value = screenBuffer.toAnnotatedString()
     }
 
     private fun handleMockCommand(cmd: String, isStartup: Boolean) {
@@ -260,7 +265,7 @@ class TerminalSession(
                 appendOutput("Linux better-shell-agent 6.8.0-arm64 #1 SMP aarch64 GNU/Linux\n")
             }
             "clear" -> {
-                _rawOutput.value = ""
+                screenBuffer.clear()
             }
             "agent", "agent --status" -> {
                 appendOutput("\u001B[1;32m● Agent Status:\u001B[0m IDLE (Awaiting prompt)\n")
@@ -301,18 +306,20 @@ class TerminalSession(
     }
 
     fun disconnect() {
-        readerJob?.cancel()
-        readerJob = null
-        try {
-            channel?.disconnect()
-            jschSession?.disconnect()
-        } catch (e: Exception) {
-            e.printStackTrace()
+        scope.launch(Dispatchers.IO) {
+            readerJob?.cancel()
+            readerJob = null
+            try {
+                channel?.disconnect()
+                jschSession?.disconnect()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            channel = null
+            jschSession = null
+            outputStream = null
+            _connectionState.value = ConnectionState.Disconnected
+            appendOutput("\n\u001B[90m[Disconnected from ${server.name}]\u001B[0m\n")
         }
-        channel = null
-        jschSession = null
-        outputStream = null
-        _connectionState.value = ConnectionState.Disconnected
-        appendOutput("\n\u001B[90m[Disconnected from ${server.name}]\u001B[0m\n")
     }
 }
