@@ -275,12 +275,14 @@ fun AddServerScreen(
                             )
                             authOptions.forEach { (type, label) ->
                                 val isSelected = authType == type
+                                val activePillBg = if (isDark) Color(0xFF424242) else Color(0xFFFFFFFF)
+                                val activeBorder = if (isDark) Color(0xFF555555) else Color(0xFFE0E0E0)
                                 Surface(
-                                    shape = CircleShape, // 全圆角
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else inputBg,
-                                    border = androidx.compose.foundation.BorderStroke(
+                                    shape = CircleShape,
+                                    color = if (isSelected) activePillBg else inputBg,
+                                    border = BorderStroke(
                                         1.dp,
-                                        if (isSelected) MaterialTheme.colorScheme.primary else inputBorder
+                                        if (isSelected) activeBorder else inputBorder
                                     ),
                                     modifier = Modifier
                                         .weight(1f)
@@ -294,7 +296,7 @@ fun AddServerScreen(
                                             text = label,
                                             fontSize = 13.sp,
                                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            color = if (isSelected) (if (isDark) Color(0xFFF3F4F6) else Color(0xFF111827)) else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }

@@ -27,8 +27,10 @@ val isAppInDarkTheme: Boolean
     get() = LocalAppIsDark.current
 
 private val DarkColorScheme = darkColorScheme(
-    primary = DarkPrimary,
-    onPrimary = DarkOnPrimary,
+    primary = Color(0xFF424242), // 与 ModeTogglePill 深色模式选中滑块完全一致的中灰 (0xFF424242)
+    onPrimary = Color(0xFFF3F4F6),
+    primaryContainer = Color(0xFF424242), // 聊天用户消息气泡、表单选中背景统一
+    onPrimaryContainer = Color(0xFFF3F4F6),
     secondary = DarkSecondary,
     background = TerminalBlack,
     surface = Color(0xFF1E1E1E), // 严格对应统一 OpenAI 卡片深色背景
@@ -40,8 +42,10 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = LightPrimary,
-    onPrimary = LightOnPrimary,
+    primary = Color(0xFFFFFFFF), // 与 ModeTogglePill 浅色模式选中滑块完全一致的纯白
+    onPrimary = Color(0xFF111827),
+    primaryContainer = Color(0xFFFFFFFF), // 聊天用户消息气泡、表单选中背景统一
+    onPrimaryContainer = Color(0xFF111827),
     secondary = LightSecondary,
     background = TerminalLight,
     surface = Color(0xFFF3F4F6), // 严格对应统一 OpenAI 卡片浅色背景

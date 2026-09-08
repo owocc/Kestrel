@@ -156,9 +156,9 @@ fun MulticaStatusPill(status: String) {
         )
     }
 }
-
 @Composable
 fun MulticaMessageItem(message: ChatMessage) {
+    val isDark = com.bettershell.app.ui.theme.isAppInDarkTheme
     when (message.sender) {
         ChatSender.SYSTEM -> {
             Box(
@@ -194,6 +194,10 @@ fun MulticaMessageItem(message: ChatMessage) {
                         bottomEnd = 4.dp
                     ),
                     color = MaterialTheme.colorScheme.primaryContainer,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isDark) Color(0xFF505050) else Color(0xFFE0E0E0)
+                    ),
                     modifier = Modifier.widthIn(max = 310.dp)
                 ) {
                     Text(

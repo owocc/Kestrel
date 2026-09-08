@@ -221,29 +221,44 @@ fun ServerBasicSettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        val activePillBg = if (isDark) Color(0xFF424242) else Color(0xFFFFFFFF)
+                        val activeBorder = if (isDark) Color(0xFF555555) else Color(0xFFE0E0E0)
+                        val inactiveBorder = if (isDark) Color(0xFF2C2D30) else Color(0xFFE5E7EB)
+                        val inactiveBg = if (isDark) Color(0xFF161616) else Color(0xFFFFFFFF)
+
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = if (authType == AuthType.PASSWORD) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, if (authType == AuthType.PASSWORD) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                            color = if (authType == AuthType.PASSWORD) activePillBg else inactiveBg,
+                            border = BorderStroke(1.dp, if (authType == AuthType.PASSWORD) activeBorder else inactiveBorder),
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable { authType = AuthType.PASSWORD }
                         ) {
                             Box(modifier = Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-                                Text("密码认证", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = if (authType == AuthType.PASSWORD) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
+                                Text(
+                                    "密码认证",
+                                    fontWeight = if (authType == AuthType.PASSWORD) FontWeight.SemiBold else FontWeight.Normal,
+                                    fontSize = 13.sp,
+                                    color = if (authType == AuthType.PASSWORD) (if (isDark) Color(0xFFF3F4F6) else Color(0xFF111827)) else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
 
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = if (authType == AuthType.PRIVATE_KEY) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, if (authType == AuthType.PRIVATE_KEY) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                            color = if (authType == AuthType.PRIVATE_KEY) activePillBg else inactiveBg,
+                            border = BorderStroke(1.dp, if (authType == AuthType.PRIVATE_KEY) activeBorder else inactiveBorder),
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable { authType = AuthType.PRIVATE_KEY }
                         ) {
                             Box(modifier = Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-                                Text("私钥认证", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = if (authType == AuthType.PRIVATE_KEY) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
+                                Text(
+                                    "私钥认证",
+                                    fontWeight = if (authType == AuthType.PRIVATE_KEY) FontWeight.SemiBold else FontWeight.Normal,
+                                    fontSize = 13.sp,
+                                    color = if (authType == AuthType.PRIVATE_KEY) (if (isDark) Color(0xFFF3F4F6) else Color(0xFF111827)) else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
