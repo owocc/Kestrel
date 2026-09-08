@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.sp
 import com.bettershell.app.agent.AgentDiscoveryRepository
 import com.bettershell.app.data.AuthType
 import com.bettershell.app.data.ServerConfig
+import com.bettershell.app.ui.theme.isAppInDarkTheme
 import com.bettershell.app.data.ServerRepository
 import com.bettershell.app.data.TerminalPreferencesRepository
 import com.bettershell.app.ui.components.OpenAiDropdownMenu
@@ -120,7 +121,20 @@ fun ServerListScreen(
                     )
                 },
                 actions = {
-                    // 右侧唯一入口：软件设置
+                    // 网格与列表模式切换：纯图标，无背景，位于设置左侧
+                    IconButton(
+                        onClick = {
+                            layoutMode = if (layoutMode == ServerLayoutMode.LIST) ServerLayoutMode.GRID else ServerLayoutMode.LIST
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (layoutMode == ServerLayoutMode.LIST) Icons.Rounded.GridView else Icons.AutoMirrored.Rounded.ViewList,
+                            contentDescription = "切换视图模式",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    // 右侧入口：软件设置
                     IconButton(onClick = onOpenAppSettings) {
                         Icon(
                             imageVector = LucideIcons.Bolt,
@@ -152,87 +166,70 @@ fun ServerListScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // 搜索栏与 List/Grid 布局切换
-            Row(
+            // 搜索栏：独占一行，放大高度 (48dp)，完全全圆角胶囊 (CircleShape)
+            Surface(
+                shape = CircleShape,
+                color = if (isAppInDarkTheme) Color(0xFF1E1E1E) else Color(0xFFF3F4F6),
+                border = BorderStroke(
+                    1.dp,
+                    if (isAppInDarkTheme) Color(0xFF2C2D30) else Color(0xFFE5E7EB)
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .height(48.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(42.dp)
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Search,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = if (isAppInDarkTheme) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+                        modifier = Modifier.size(20.dp)
+                    )
 
-                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                            if (searchQuery.isEmpty()) {
-                                Text(
-                                    text = "搜索服务器名称 / IP / 用户名...",
-                                    style = TextStyle(fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f))
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        if (searchQuery.isEmpty()) {
+                            Text(
+                                text = "搜索服务器名称 / IP / 用户名...",
+                                style = TextStyle(
+                                    fontSize = 14.5.sp,
+                                    color = if (isAppInDarkTheme) Color(0xFF9CA3AF).copy(alpha = 0.75f) else Color(0xFF6B7280).copy(alpha = 0.75f)
                                 )
-                            }
-                            BasicTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                singleLine = true,
-                                textStyle = TextStyle(fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurface),
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                modifier = Modifier.fillMaxWidth()
                             )
                         }
-
-                        if (searchQuery.isNotEmpty()) {
-                            Icon(
-                                imageVector = Icons.Rounded.Clear,
-                                contentDescription = "Clear",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .clickable { searchQuery = "" }
-                            )
-                        }
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            singleLine = true,
+                            textStyle = TextStyle(
+                                fontSize = 14.5.sp,
+                                color = if (isAppInDarkTheme) Color(0xFFF3F4F6) else Color(0xFF111827)
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
-                }
 
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable {
-                            layoutMode = if (layoutMode == ServerLayoutMode.LIST) ServerLayoutMode.GRID else ServerLayoutMode.LIST
-                        }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    if (searchQuery.isNotEmpty()) {
                         Icon(
-                            imageVector = if (layoutMode == ServerLayoutMode.LIST) Icons.Rounded.GridView else Icons.AutoMirrored.Rounded.ViewList,
-                            contentDescription = "切换视图模式",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
+                            imageVector = Icons.Rounded.Clear,
+                            contentDescription = "Clear",
+                            tint = if (isAppInDarkTheme) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clickable { searchQuery = "" }
                         )
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             if (filteredServers.isEmpty()) {
                 Box(
