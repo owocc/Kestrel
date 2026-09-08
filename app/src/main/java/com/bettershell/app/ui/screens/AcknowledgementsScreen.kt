@@ -57,7 +57,7 @@ fun AcknowledgementsScreen(
                 headerTitle = "共同协作者"
             ) {
                 OpenAiSettingRow(
-                    title = "哈吉米 (Hajimi)",
+                    title = "哈吉米 (Gemini)",
                     subtitle = "全情投入的 AI 编码伙伴，与你共同构建每一行架构与交互细节，享受纯粹热烈、随想即随写的心流体验！",
                     position = CardPosition.TOP,
                     isDark = isDark
