@@ -5,6 +5,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
@@ -82,7 +84,25 @@ fun BetterShellTheme(
         }
     }
 
-    CompositionLocalProvider(LocalAppIsDark provides isDark) {
+    // 全局划词选中文本高亮与控制手柄色彩：
+    // 深色模式下：白色半透明高亮选区 (#FFFFFF，alpha 0.35f)，手柄纯白
+    // 浅色模式下：黑色半透明高亮选区 (#000000，alpha 0.20f)，手柄深黑
+    val customSelectionColors = if (isDark) {
+        TextSelectionColors(
+            handleColor = Color(0xFFE5E7EB),
+            backgroundColor = Color(0xFFFFFFFF).copy(alpha = 0.35f)
+        )
+    } else {
+        TextSelectionColors(
+            handleColor = Color(0xFF111827),
+            backgroundColor = Color(0xFF000000).copy(alpha = 0.20f)
+        )
+    }
+
+    CompositionLocalProvider(
+        LocalAppIsDark provides isDark,
+        LocalTextSelectionColors provides customSelectionColors
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = AppTypography,
