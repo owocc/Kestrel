@@ -1,7 +1,10 @@
 package com.bettershell.app.ui.components
 
-import androidx.activity.BackEventCompat
-import androidx.activity.compose.PredictiveBackHandler
+import android.os.Build
+import android.window.BackEvent
+import android.window.OnBackAnimationCallback
+import android.window.OnBackInvokedDispatcher
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -25,8 +28,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -39,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -48,8 +55,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.bettershell.app.ui.theme.isAppInDarkTheme
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 data class OpenAiMenuItemData(
@@ -61,12 +66,7 @@ data class OpenAiMenuItemData(
 )
 
 /**
- * Android 原生 Flip 弹出动画 & 预测性手势收回的高级浮层菜单 (Flip Animated Predictive Dropdown Menu)
- *
- * 核心动效规范：
- * 1. 【出入同源 Flip】：从右上角锚点（transformOrigin = 1f, 0f）弹性伸展展开，收起时原路折叠缩回；
- * 2. 【支持预见式手势返回】：展开状态下，侧滑返回手指滑动时，菜单随进度平滑缩减 scale 和 alpha，松手提交优雅缩回关闭；
- * 3. 【无上下内边距】：容器零边距，首尾条目贴合 20dp 大圆角，高度 19dp 纵深，扩散 20dp 柔和晕染阴影。
+ * Android 原生 Flip 弹出动画 & 真实系统窗口级 OnBackAnimationCallback 预见式手势收起菜单
  */
 @Composable
 fun OpenAiDropdownMenu(
@@ -83,20 +83,24 @@ fun OpenAiDropdownMenu(
     val animAlpha = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
-    val gestureProgress = remember { Animatable(0f) }
-    var isBackGestureActive by remember { mutableStateOf(false) }
+    // 捕获宿主窗口的 Dispatcher Owner，透传到 Popup 内部
+    val parentDispatcherOwner = LocalOnBackPressedDispatcherOwner.current
+
+    // 预见式手势实时进度
+    var gestureFraction by remember { mutableFloatStateOf(0f) }
+    var isGestureTracking by remember { mutableStateOf(false) }
 
     fun dismissWithAnimation() {
         scope.launch {
             animScale.animateTo(
                 targetValue = 0.75f,
-                animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = 130, easing = FastOutSlowInEasing)
             )
         }
         scope.launch {
             animAlpha.animateTo(
                 targetValue = 0f,
-                animationSpec = tween(durationMillis = 140)
+                animationSpec = tween(durationMillis = 130)
             )
             isVisible = false
             onDismissRequest()
@@ -106,6 +110,8 @@ fun OpenAiDropdownMenu(
     LaunchedEffect(expanded) {
         if (expanded) {
             isVisible = true
+            gestureFraction = 0f
+            isGestureTracking = false
             animScale.snapTo(0.75f)
             animAlpha.snapTo(0f)
             scope.launch {
@@ -120,7 +126,7 @@ fun OpenAiDropdownMenu(
             scope.launch {
                 animAlpha.animateTo(
                     targetValue = 1f,
-                    animationSpec = tween(durationMillis = 160)
+                    animationSpec = tween(durationMillis = 150)
                 )
             }
         } else if (isVisible) {
@@ -139,50 +145,75 @@ fun OpenAiDropdownMenu(
         onDismissRequest = { dismissWithAnimation() },
         properties = PopupProperties(
             focusable = true,
-            dismissOnBackPress = false, // 由内层专门的 PredictiveBackHandler 接管
+            dismissOnBackPress = false, // 由底层的系统级回调精准接管并执行动画
             dismissOnClickOutside = true
         )
     ) {
-        // 核心：独占拦截当前浮层的 Android 16 预见式返回手势！
-        PredictiveBackHandler(enabled = isVisible) { progressFlow: Flow<BackEventCompat> ->
-            isBackGestureActive = true
-            try {
-                progressFlow.collect { event ->
-                    val eased = FastOutSlowInEasing.transform(event.progress)
-                    gestureProgress.snapTo(eased)
+        val popupView = LocalView.current
+
+        // 核心技术突破：在 Popup 真实的 Android Window 级别直接注册 OnBackAnimationCallback！
+        // 从而直接由系统 Framework 将侧滑手势逐帧派发到这里，绝对支持原生预测性返回！
+        DisposableEffect(popupView) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val dispatcher = popupView.findOnBackInvokedDispatcher()
+                val callback = object : OnBackAnimationCallback {
+                    override fun onBackStarted(backEvent: BackEvent) {
+                        isGestureTracking = true
+                        gestureFraction = FastOutSlowInEasing.transform(backEvent.progress)
+                    }
+
+                    override fun onBackProgressed(backEvent: BackEvent) {
+                        gestureFraction = FastOutSlowInEasing.transform(backEvent.progress)
+                    }
+
+                    override fun onBackInvoked() {
+                        // 手势确认提交：缩回并关闭
+                        isGestureTracking = false
+                        dismissWithAnimation()
+                    }
+
+                    override fun onBackCancelled() {
+                        // 手势放弃：复位展开
+                        scope.launch {
+                            val anim = Animatable(gestureFraction)
+                            anim.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow)) {
+                                gestureFraction = value
+                            }
+                            isGestureTracking = false
+                        }
+                    }
                 }
-                // 手势确认退出 (Commit)：顺势完全缩回原点并消失
-                gestureProgress.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing)
+
+                dispatcher?.registerOnBackInvokedCallback(
+                    OnBackInvokedDispatcher.PRIORITY_OVERLAY,
+                    callback
                 )
-                gestureProgress.snapTo(0f)
-                isBackGestureActive = false
-                isVisible = false
-                onDismissRequest()
-            } catch (e: CancellationException) {
-                // 手势取消 (Cancel)：弹簧复位展开
-                scope.launch {
-                    gestureProgress.animateTo(
-                        targetValue = 0f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    )
-                    isBackGestureActive = false
+
+                onDispose {
+                    dispatcher?.unregisterOnBackInvokedCallback(callback)
+                }
+            } else {
+                onDispose {}
+            }
+        }
+
+        // 针对低于 Android 14 或 fallback 的兼容保证
+        if (parentDispatcherOwner != null) {
+            CompositionLocalProvider(LocalOnBackPressedDispatcherOwner provides parentDispatcherOwner) {
+                androidx.activity.compose.BackHandler(enabled = isVisible && !isGestureTracking) {
+                    dismissWithAnimation()
                 }
             }
         }
 
-        val effectiveScale = if (isBackGestureActive) {
-            (1f - (gestureProgress.value * 0.35f)).coerceIn(0.65f, 1f)
+        val effectiveScale = if (isGestureTracking) {
+            (1f - gestureFraction * 0.40f).coerceIn(0.60f, 1f)
         } else {
             animScale.value
         }
 
-        val effectiveAlpha = if (isBackGestureActive) {
-            (1f - (gestureProgress.value * 0.85f)).coerceIn(0f, 1f)
+        val effectiveAlpha = if (isGestureTracking) {
+            (1f - gestureFraction * 0.85f).coerceIn(0f, 1f)
         } else {
             animAlpha.value
         }
