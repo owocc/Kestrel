@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 
 sealed interface Screen {
     data object ServerList : Screen
+    data object AddServer : Screen
     data object AppSettings : Screen
     data object AppFontSettings : Screen
     data object AppAbout : Screen
@@ -85,12 +86,24 @@ class MainActivity : ComponentActivity() {
                                     repository = repository,
                                     prefsRepository = terminalPrefsRepo,
                                     onOpenAppSettings = { pushScreen(Screen.AppSettings) },
+                                    onOpenAddServer = { pushScreen(Screen.AddServer) },
                                     onOpenServerSettings = { server ->
                                         pushScreen(Screen.ServerSettings(server, fromSession = false))
                                     },
                                     onSelectServer = { server ->
                                         pushScreen(Screen.Session(server))
                                     }
+                                )
+                            }
+                            is Screen.AddServer -> {
+                                com.bettershell.app.ui.screens.AddServerScreen(
+                                    onSave = { newServer ->
+                                        coroutineScope.launch {
+                                            repository.addServer(newServer)
+                                        }
+                                        popScreen()
+                                    },
+                                    onBack = onBackAction
                                 )
                             }
                             is Screen.AppSettings -> {

@@ -87,11 +87,11 @@ fun ServerListScreen(
     repository: ServerRepository,
     prefsRepository: TerminalPreferencesRepository,
     onOpenAppSettings: () -> Unit,
+    onOpenAddServer: () -> Unit,
     onOpenServerSettings: (ServerConfig) -> Unit,
     onSelectServer: (ServerConfig) -> Unit
 ) {
     val servers by repository.servers.collectAsState()
-    var showAddDialog by remember { mutableStateOf(false) }
     var layoutMode by remember { mutableStateOf(ServerLayoutMode.LIST) }
     var searchQuery by remember { mutableStateOf("") }
 
@@ -137,9 +137,10 @@ fun ServerListScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { showAddDialog = true },
-                icon = { Icon(Icons.Rounded.Add, "新建服务器") },
-                text = { Text("新建服务器", fontWeight = FontWeight.SemiBold) },
+                onClick = onOpenAddServer,
+                icon = { Icon(Icons.Rounded.Add, "添加服务器") },
+                text = { Text("添加服务器", fontWeight = FontWeight.SemiBold) },
+                shape = androidx.compose.foundation.shape.CircleShape, // 全圆角胶囊
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 elevation = FloatingActionButtonDefaults.elevation(4.dp)
@@ -317,18 +318,6 @@ fun ServerListScreen(
         }
     }
 
-    if (showAddDialog) {
-        AddEditServerDialog(
-            initialServer = null,
-            onDismiss = { showAddDialog = false },
-            onSave = { newServer ->
-                scope.launch {
-                    repository.addServer(newServer)
-                }
-                showAddDialog = false
-            }
-        )
-    }
 }
 
 /**
