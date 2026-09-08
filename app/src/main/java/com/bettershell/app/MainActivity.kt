@@ -26,6 +26,7 @@ import com.bettershell.app.ui.theme.TerminalBlack
 sealed interface Screen {
     data object ServerList : Screen
     data class Session(val server: ServerConfig) : Screen
+    data class RawLogs(val server: ServerConfig, val logs: String) : Screen
 }
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,8 +64,19 @@ class MainActivity : ComponentActivity() {
                                     repository = repository,
                                     sessionManager = sessionManager,
                                     prefsRepository = terminalPrefsRepo,
+                                    onOpenRawLogs = { logsText ->
+                                        currentScreen = Screen.RawLogs(screen.server, logsText)
+                                    },
                                     onBack = {
                                         currentScreen = Screen.ServerList
+                                    }
+                                )
+                            }
+                            is Screen.RawLogs -> {
+                                com.bettershell.app.ui.screens.RawLogsScreen(
+                                    rawLogs = screen.logs,
+                                    onBack = {
+                                        currentScreen = Screen.Session(screen.server)
                                     }
                                 )
                             }

@@ -123,4 +123,24 @@ class SessionManager {
             _activeSessionMap.value = _activeSessionMap.value + (serverId to nextActive)
         }
     }
+
+    // Chat 专属独立会话映射 (serverId -> ServerSessionItem)
+    private val _chatSessionsMap = MutableStateFlow<Map<String, ServerSessionItem>>(emptyMap())
+    val chatSessionsMap: StateFlow<Map<String, ServerSessionItem>> = _chatSessionsMap.asStateFlow()
+
+    fun getOrCreateChatSession(server: ServerConfig): ServerSessionItem {
+        val existing = _chatSessionsMap.value[server.id]
+        if (existing != null && existing.terminalSession.connectionState.value !is ConnectionState.Disconnected) {
+            return existing
+        }
+        val termSession = TerminalSession(server, scope)
+        val item = ServerSessionItem(
+            serverId = server.id,
+            title = "Agent (omp)",
+            terminalSession = termSession,
+            isCustomTitle = true
+        )
+        _chatSessionsMap.value = _chatSessionsMap.value + (server.id to item)
+        return item
+    }
 }

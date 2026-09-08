@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,6 +54,11 @@ class TerminalSession(
 
     private val _annotatedOutput = MutableStateFlow(AnnotatedString(""))
     val annotatedOutput: StateFlow<AnnotatedString> = _annotatedOutput.asStateFlow()
+
+    // 仅用于增量事件流（单行/增量 chunk 实时分发，不保留全量累积文本）
+    private val _rawChunkFlow = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 64)
+    val rawChunkFlow: kotlinx.coroutines.flow.SharedFlow<String> = _rawChunkFlow.asSharedFlow()
+
     private val _history = MutableStateFlow<List<String>>(emptyList())
     fun getAnnotatedOutput(isDark: Boolean): AnnotatedString {
         return screenBuffer.toAnnotatedString(isDark)
@@ -182,6 +188,7 @@ class TerminalSession(
                     val read = inputStream.read(buffer)
                     if (read == -1) break
                     val text = String(buffer, 0, read, StandardCharsets.UTF_8)
+                    _rawChunkFlow.tryEmit(text)
                     appendOutput(text)
                 }
             } catch (e: Exception) {

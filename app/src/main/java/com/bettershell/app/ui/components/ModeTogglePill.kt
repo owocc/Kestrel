@@ -5,14 +5,15 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -35,27 +36,35 @@ import kotlin.math.roundToInt
 
 enum class SessionMode(val title: String) {
     CHAT("Chat"),
-    SHELL("Work")
+    SHELL("Shell")
 }
 
 /**
- * 现代双胶囊模式切换滑块 (Chat / Work 切换)
- * 对应用户设计截图：全圆角胶囊背景 + 平滑滑块动画指示器
+ * 现代居中双胶囊模式切换滑块 (Chat / Shell 切换)
+ * 适配深色 / 浅色模式：
+ * - 深色模式：深灰容器 + 高亮中灰滑块
+ * - 浅色模式：浅灰容器 + 纯白高质感滑块，带细微边框
  */
 @Composable
 fun ModeTogglePill(
     currentMode: SessionMode,
     onModeSelected: (SessionMode) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isDark: Boolean = isSystemInDarkTheme()
 ) {
     val modes = SessionMode.entries
     val selectedIndex = modes.indexOf(currentMode)
+
+    val containerBg = if (isDark) Color(0xFF262626) else Color(0xFFE5E7EB)
+    val sliderBg = if (isDark) Color(0xFF424242) else Color(0xFFFFFFFF)
+    val containerBorderColor = if (isDark) Color(0xFF333333) else Color(0xFFD1D5DB)
 
     BoxWithConstraints(
         modifier = modifier
             .height(38.dp)
             .clip(RoundedCornerShape(19.dp))
-            .background(Color(0xFF262626)) // 深灰胶囊背景
+            .background(containerBg)
+            .border(1.dp, containerBorderColor.copy(alpha = 0.5f), RoundedCornerShape(19.dp))
             .padding(3.dp)
     ) {
         val totalWidth = maxWidth
@@ -83,7 +92,11 @@ fun ModeTogglePill(
                 .width(segmentWidth)
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF424242)) // 活跃滑块颜色
+                .background(sliderBg)
+                .then(
+                    if (!isDark) Modifier.border(0.5.dp, Color(0xFFE0E0E0), RoundedCornerShape(16.dp))
+                    else Modifier
+                )
         )
 
         // 按钮文字排版
@@ -93,8 +106,11 @@ fun ModeTogglePill(
         ) {
             modes.forEach { mode ->
                 val isSelected = mode == currentMode
+                val unselectedTextColor = if (isDark) Color(0xFF9E9E9E) else Color(0xFF6B7280)
+                val selectedTextColor = if (isDark) Color.White else Color(0xFF111827)
+
                 val textColor by animateColorAsState(
-                    targetValue = if (isSelected) Color.White else Color(0xFF9E9E9E),
+                    targetValue = if (isSelected) selectedTextColor else unselectedTextColor,
                     label = "textColor"
                 )
 
@@ -113,7 +129,7 @@ fun ModeTogglePill(
                 ) {
                     Text(
                         text = mode.title,
-                        fontSize = 14.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                         color = textColor
                     )

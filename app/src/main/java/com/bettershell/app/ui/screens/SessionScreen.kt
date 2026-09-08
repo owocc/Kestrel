@@ -81,6 +81,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import com.bettershell.app.ui.components.LucideEllipsis
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -147,6 +150,7 @@ import com.bettershell.app.ui.theme.AccentRed
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import com.bettershell.app.terminal.OmpAgentClient
+import com.bettershell.app.ui.components.AgentLogsBottomSheet
 import com.bettershell.app.ui.components.AgentChatView
 import com.bettershell.app.ui.components.ModeTogglePill
 import com.bettershell.app.ui.components.SessionMode
@@ -158,6 +162,7 @@ fun SessionScreen(
     repository: ServerRepository,
     sessionManager: SessionManager,
     prefsRepository: TerminalPreferencesRepository,
+    onOpenRawLogs: (logs: String) -> Unit = {},
     onBack: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -174,10 +179,9 @@ fun SessionScreen(
         sessionManager.getActiveSession(currentServer.id)
             ?: sessionManager.getOrCreateInitialSession(currentServer)
     }
-
-    val terminalSession = activeSessionItem.terminalSession
-    val connectionState by terminalSession.connectionState.collectAsState()
-    val rawAnnotatedOutput by terminalSession.annotatedOutput.collectAsState()
+    val shellTerminalSession = activeSessionItem.terminalSession
+    val shellConnectionState by shellTerminalSession.connectionState.collectAsState()
+    val shellRawOutput by shellTerminalSession.annotatedOutput.collectAsState()
     val terminalPrefs by prefsRepository.preferences.collectAsState()
 
     val isDark = when (terminalPrefs.themeMode) {
@@ -185,31 +189,45 @@ fun SessionScreen(
         AppThemeMode.LIGHT -> false
         AppThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
-    val displayOutput = remember(rawAnnotatedOutput, isDark) {
-        terminalSession.getAnnotatedOutput(isDark)
+    val displayOutput = remember(shellRawOutput, isDark) {
+        shellTerminalSession.getAnnotatedOutput(isDark)
     }
+
+    // Chat 专属独立会话 (与 Shell 彻底隔离)
+    val chatSessionItem = remember(currentServer.id) {
+        sessionManager.getOrCreateChatSession(currentServer)
+    }
+    val chatTerminalSession = chatSessionItem.terminalSession
+    val chatRawOutput by chatTerminalSession.annotatedOutput.collectAsState()
+    val chatConnectionState by chatTerminalSession.connectionState.collectAsState()
 
     var currentMode by remember { mutableStateOf(SessionMode.SHELL) }
     var inputText by remember { mutableStateOf("") }
     var isExpandedInput by remember { mutableStateOf(false) }
     var showServerSettingsSheet by remember { mutableStateOf(false) }
     var showSessionSwitcherSheet by remember { mutableStateOf(false) }
+    var showAgentLogsSheet by remember { mutableStateOf(false) }
     var sessionToRename by remember { mutableStateOf<ServerSessionItem?>(null) }
     var showFontSizeIndicator by remember { mutableStateOf(false) }
     var indicatorDismissJob by remember { mutableStateOf<Job?>(null) }
 
     val ompAgentClient = remember(currentServer.id) {
         OmpAgentClient(
-            sendRawCommand = { cmd -> terminalSession.sendCommand(cmd) }
+            sendRawCommand = { cmd -> chatTerminalSession.sendCommand(cmd) }
         )
     }
     val chatMessages by ompAgentClient.messages.collectAsState()
     val isAgentBusy by ompAgentClient.isAgentBusy.collectAsState()
     val currentAgentStatus by ompAgentClient.currentStatus.collectAsState()
-    // 远程输出流驱动 ompAgentClient 解析
-    LaunchedEffect(rawAnnotatedOutput) {
-        ompAgentClient.onRemoteOutput(rawAnnotatedOutput.text)
+    val agentRawLogs by ompAgentClient.rawLogs.collectAsState()
+    val agentEventLogs by ompAgentClient.eventLogs.collectAsState()
+    // 远程输出流驱动 ompAgentClient 解析 (使用 Chat 专属独立会话的单次增量流 rawChunkFlow，杜绝全量累加导致的重复重解析)
+    LaunchedEffect(chatTerminalSession) {
+        chatTerminalSession.rawChunkFlow.collect { chunk ->
+            ompAgentClient.onRemoteOutput(chunk)
+        }
     }
+
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val density = LocalDensity.current
@@ -217,7 +235,6 @@ fun SessionScreen(
     val navBottomDp = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
     val isImeVisible = WindowInsets.isImeVisible
     val bottomNavPadding = if (isImeVisible) 0.dp else navBottomDp
-
     // Hierarchical back handling
     BackHandler(enabled = true) {
         when {
@@ -261,7 +278,7 @@ fun SessionScreen(
             SessionTopBar(
                 server = currentServer,
                 activeSession = activeSessionItem,
-                connectionState = connectionState,
+                connectionState = if (currentMode == SessionMode.CHAT) chatConnectionState else shellConnectionState,
                 currentMode = currentMode,
                 onModeSelected = { currentMode = it },
                 softWrap = terminalPrefs.softWrap,
@@ -277,11 +294,20 @@ fun SessionScreen(
                     onBack()
                 },
                 onTitleClick = { showSessionSwitcherSheet = true },
-                onReconnect = { terminalSession.connect() },
-                onClear = { terminalSession.clearScreen() },
+                onViewLogs = { showAgentLogsSheet = true },
+                onReconnect = {
+                    if (currentMode == SessionMode.CHAT) chatTerminalSession.connect()
+                    else shellTerminalSession.connect()
+                },
+                onClear = {
+                    if (currentMode == SessionMode.CHAT) {
+                        chatTerminalSession.clearScreen()
+                    } else {
+                        shellTerminalSession.clearScreen()
+                    }
+                },
                 onOpenSettings = { showServerSettingsSheet = true }
             )
-
             // Content Area: Switch between Agent Chat View and Interactive Terminal View
             if (currentMode == SessionMode.CHAT) {
                 AgentChatView(
@@ -432,14 +458,15 @@ fun SessionScreen(
                     fontFamily = terminalPrefs.font.toComposeFontFamily(),
                     onCollapse = { isExpandedInput = false },
                     onSend = {
-                        if (inputText.isNotBlank()) {
-                            if (currentMode == SessionMode.CHAT) {
-                                ompAgentClient.sendPrompt(inputText)
-                            } else {
-                                terminalSession.sendCommand(inputText)
-                            }
+                        val textToSend = inputText.trim()
+                        if (textToSend.isNotBlank()) {
                             inputText = ""
                             isExpandedInput = false
+                            if (currentMode == SessionMode.CHAT) {
+                                ompAgentClient.sendPrompt(textToSend)
+                            } else {
+                                shellTerminalSession.sendCommand(textToSend)
+                            }
                         }
                     }
                 )
@@ -455,7 +482,7 @@ fun SessionScreen(
                 ) {
                     // Quick Shortcut Bar (ENTER, ESC, TAB, CTRL-C, CTRL-D, Arrows)
                     QuickShortcutBar(
-                        onSendRaw = { terminalSession.sendRaw(it) },
+                        onSendRaw = { shellTerminalSession.sendRaw(it) },
                         onInsertText = { inputText += it }
                     )
 
@@ -475,13 +502,14 @@ fun SessionScreen(
                         },
                         isChatMode = currentMode == SessionMode.CHAT,
                         onSend = {
-                            if (inputText.isNotBlank()) {
-                                if (currentMode == SessionMode.CHAT) {
-                                    ompAgentClient.sendPrompt(inputText)
-                                } else {
-                                    terminalSession.sendCommand(inputText)
-                                }
+                            val textToSend = inputText.trim()
+                            if (textToSend.isNotBlank()) {
                                 inputText = ""
+                                if (currentMode == SessionMode.CHAT) {
+                                    ompAgentClient.sendPrompt(textToSend)
+                                } else {
+                                    shellTerminalSession.sendCommand(textToSend)
+                                }
                             }
                         }
                     )
@@ -496,7 +524,7 @@ fun SessionScreen(
             onRunStartupScript = {
                 if (currentServer.startupScript.isNotBlank()) {
                     for (line in currentServer.startupScript.lines().filter { it.isNotBlank() && !it.startsWith("#") }) {
-                        terminalSession.sendCommand(line)
+                        shellTerminalSession.sendCommand(line)
                     }
                 }
                 showToolsSheet = false
@@ -509,14 +537,24 @@ fun SessionScreen(
                 inputText += sym
             },
             onClearTerminal = {
-                terminalSession.clearScreen()
+                shellTerminalSession.clearScreen()
                 showToolsSheet = false
             },
             onDismiss = { showToolsSheet = false }
         )
     }
 
-    // Session Switcher Bottom Sheet
+    // Chat 日志查看弹窗 (仿 Multica 一行一个事件流，并支持打开纯文本页面)
+    if (showAgentLogsSheet) {
+        AgentLogsBottomSheet(
+            eventLogs = agentEventLogs,
+            onOpenRawLogsPage = {
+                showAgentLogsSheet = false
+                onOpenRawLogs(agentRawLogs)
+            },
+            onDismiss = { showAgentLogsSheet = false }
+        )
+    }
     if (showSessionSwitcherSheet) {
         SessionSwitcherSheet(
             server = currentServer,
@@ -585,23 +623,23 @@ fun SessionTopBar(
     onToggleTheme: () -> Unit,
     onBack: () -> Unit,
     onTitleClick: () -> Unit,
+    onViewLogs: () -> Unit,
     onReconnect: () -> Unit,
     onClear: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    Row(
+    var showMoreMenu by remember { mutableStateOf(false) }
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 8.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.weight(1f)
+        // 1. 左侧：极简只留一个返回按钮
+        Box(
+            modifier = Modifier.align(Alignment.CenterStart)
         ) {
             IconButton(onClick = onBack) {
                 Icon(
@@ -610,85 +648,137 @@ fun SessionTopBar(
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
+        }
 
-            // 顶部模式切换滑块 (Chat / Work 切换)
+        // 2. 中间：双胶囊切换滑块（Chat / Shell 模式），绝对居中！
+        Box(
+            modifier = Modifier.align(Alignment.Center)
+        ) {
             ModeTogglePill(
                 currentMode = currentMode,
                 onModeSelected = onModeSelected,
-                modifier = Modifier.width(140.dp)
+                isDark = isDark,
+                modifier = Modifier.width(148.dp)
             )
-
-            Column(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onTitleClick)
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = server.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Icon(
-                        imageVector = Icons.Rounded.KeyboardArrowDown,
-                        contentDescription = "Switch Sessions",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
         }
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        // 3. 右侧：只留一个 Lucide 风格 Ellipsis 更多按钮，展开精简下拉菜单
+        Box(
+            modifier = Modifier.align(Alignment.CenterEnd)
         ) {
-            IconButton(onClick = onToggleTheme) {
-                Icon(
-                    imageVector = if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                    contentDescription = "切换主题模式",
-                    tint = MaterialTheme.colorScheme.onSurface
+            IconButton(onClick = { showMoreMenu = true }) {
+                LucideEllipsis(
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    size = 22.dp
                 )
             }
 
-            IconButton(onClick = onToggleSoftWrap) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.WrapText,
-                    contentDescription = if (softWrap) "禁用自动换行" else "启用自动换行",
-                    tint = if (softWrap) AccentGreen else MaterialTheme.colorScheme.onSurfaceVariant
+            DropdownMenu(
+                expanded = showMoreMenu,
+                onDismissRequest = { showMoreMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("会话列表 (${server.name})") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Terminal,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        showMoreMenu = false
+                        onTitleClick()
+                    }
                 )
-            }
 
-            if (connectionState is ConnectionState.Disconnected || connectionState is ConnectionState.Error) {
-                IconButton(onClick = onReconnect) {
-                    Icon(
-                        imageVector = Icons.Rounded.Refresh,
-                        contentDescription = "Reconnect",
-                        tint = AccentGreen
+                DropdownMenuItem(
+                    text = { Text("查看 Chat 原始日志") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Code,
+                            contentDescription = null,
+                            tint = AccentCyan
+                        )
+                    },
+                    onClick = {
+                        showMoreMenu = false
+                        onViewLogs()
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                DropdownMenuItem(
+                    text = { Text(if (isDark) "浅色主题" else "深色主题") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        showMoreMenu = false
+                        onToggleTheme()
+                    }
+                )
+
+                DropdownMenuItem(
+                    text = { Text(if (softWrap) "禁用自动换行" else "启用自动换行") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.WrapText,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        showMoreMenu = false
+                        onToggleSoftWrap()
+                    }
+                )
+
+                if (connectionState is ConnectionState.Disconnected || connectionState is ConnectionState.Error) {
+                    DropdownMenuItem(
+                        text = { Text("重新连接", color = AccentGreen) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = null,
+                                tint = AccentGreen
+                            )
+                        },
+                        onClick = {
+                            showMoreMenu = false
+                            onReconnect()
+                        }
                     )
                 }
-            }
 
-            IconButton(onClick = onClear) {
-                Icon(
-                    imageVector = Icons.Rounded.DeleteSweep,
-                    contentDescription = "Clear Terminal",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                DropdownMenuItem(
+                    text = { Text("清空终端") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.DeleteSweep,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        showMoreMenu = false
+                        onClear()
+                    }
                 )
-            }
 
-            IconButton(onClick = onOpenSettings) {
-                Icon(
-                    imageVector = Icons.Rounded.Settings,
-                    contentDescription = "Server Settings",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                DropdownMenuItem(
+                    text = { Text("服务器设置") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        showMoreMenu = false
+                        onOpenSettings()
+                    }
                 )
             }
         }

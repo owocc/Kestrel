@@ -70,9 +70,19 @@ class OmpAgentClient(
     private val _currentStatus = MutableStateFlow<String?>(null)
     val currentStatus: StateFlow<String?> = _currentStatus.asStateFlow()
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val _rawLogs = MutableStateFlow<String>("")
+    val rawLogs: StateFlow<String> = _rawLogs.asStateFlow()
 
+    // 仿 Multica 结构化事件流 (一行一个事件记录)
+    private val _eventLogs = MutableStateFlow<List<AgentEventLogItem>>(emptyList())
+    val eventLogs: StateFlow<List<AgentEventLogItem>> = _eventLogs.asStateFlow()
+
+    private val json = Json { ignoreUnknownKeys = true }
+    private var lineBuffer = StringBuilder()
     fun sendPrompt(prompt: String) {
+        val timeStr = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date())
+        _rawLogs.value = (_rawLogs.value + "\n\n[$timeStr] >>> [USER_PROMPT] $prompt\n[$timeStr] >>> [SEND_COMMAND] omp --mode json -p '$prompt'\n").takeLast(60000)
+        addEventLog(timeStr, "prompt", "用户下发指令", prompt, AgentEventLevel.INFO)
         val userMsg = ChatMessage(
             id = "user_${System.currentTimeMillis()}",
             sender = ChatSender.USER,
@@ -95,62 +105,85 @@ class OmpAgentClient(
         sendRawCommand("omp --mode json -p '$safePrompt'\n")
     }
 
-    fun onRemoteOutput(text: String) {
-        for (rawLine in text.lines()) {
-            val line = rawLine.trim()
-            if (!line.startsWith("{") || !line.endsWith("}")) continue
+    /**
+     * 处理来自 SSH 管道的增量文本 chunk (流式行缓冲，一行一行精准解析，不重复投递)
+     */
+    fun onRemoteOutput(chunk: String) {
+        val timeStr = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date())
+        _rawLogs.value = (_rawLogs.value + "\n[$timeStr] <<< $chunk").takeLast(60000)
 
-            try {
-                val obj = json.parseToJsonElement(line).jsonObject
-                val type = obj["type"]?.jsonPrimitive?.content ?: continue
+        lineBuffer.append(chunk)
 
-                when (type) {
-                    "tool_execution_start" -> {
-                        val toolName = obj["toolName"]?.jsonPrimitive?.content ?: "tool"
-                        val intent = obj["intent"]?.jsonPrimitive?.content
-                            ?: obj["args"]?.toString()
-                            ?: "调用工具: $toolName"
+        while (true) {
+            val newlineIndex = lineBuffer.indexOf('\n')
+            if (newlineIndex == -1) break
 
-                        _currentStatus.value = formatToolStatus(toolName)
-                        addStepToCurrentAgent(
-                            ExecutionStep(
-                                id = obj["toolCallId"]?.jsonPrimitive?.content ?: "step_${System.currentTimeMillis()}",
-                                type = StepType.TOOL_CALL,
-                                toolName = toolName,
-                                title = getToolDisplayTitle(toolName),
-                                detail = intent,
-                                isRunning = true
-                            )
+            val completeLine = lineBuffer.substring(0, newlineIndex).trim()
+            lineBuffer.delete(0, newlineIndex + 1)
+
+            if (completeLine.startsWith("{") && completeLine.endsWith("}")) {
+                processJsonLine(completeLine, timeStr)
+            }
+        }
+    }
+
+    private fun processJsonLine(line: String, timeStr: String) {
+        try {
+            val obj = json.parseToJsonElement(line).jsonObject
+            val type = obj["type"]?.jsonPrimitive?.content ?: return
+
+            when (type) {
+                "agent_start" -> {
+                    addEventLog(timeStr, "agent_start", "Agent 任务已启动", level = AgentEventLevel.INFO)
+                }
+                "tool_execution_start" -> {
+                    val toolName = obj["toolName"]?.jsonPrimitive?.content ?: "tool"
+                    val intent = obj["intent"]?.jsonPrimitive?.content
+                        ?: obj["args"]?.toString()
+                        ?: "调用工具: $toolName"
+                    _rawLogs.value = (_rawLogs.value + "\n[$timeStr] [STEP_START] $toolName: $intent").takeLast(60000)
+                    _currentStatus.value = formatToolStatus(toolName)
+                    addEventLog(timeStr, "tool_start", "执行工具: $toolName", intent, AgentEventLevel.TOOL)
+                    addStepToCurrentAgent(
+                        ExecutionStep(
+                            id = obj["toolCallId"]?.jsonPrimitive?.content ?: "step_${System.currentTimeMillis()}",
+                            type = StepType.TOOL_CALL,
+                            toolName = toolName,
+                            title = getToolDisplayTitle(toolName),
+                            detail = intent,
+                            isRunning = true
                         )
-                    }
+                    )
+                }
 
-                    "tool_execution_end" -> {
-                        val toolCallId = obj["toolCallId"]?.jsonPrimitive?.content
-                        val resultStr = obj["result"]?.toString()
-                        finishStep(toolCallId, resultStr)
-                        _currentStatus.value = "Thinking..."
-                    }
+                "tool_execution_end" -> {
+                    val toolCallId = obj["toolCallId"]?.jsonPrimitive?.content
+                    val resultStr = obj["result"]?.toString()
+                    finishStep(toolCallId, resultStr)
+                    _currentStatus.value = "Thinking..."
+                    addEventLog(timeStr, "tool_end", "工具执行完毕", resultStr?.take(200), AgentEventLevel.STEP)
+                }
 
-                    "message_update" -> {
-                        val eventObj = obj["assistantMessageEvent"]?.jsonObject
-                        if (eventObj != null) {
-                            val eventType = eventObj["type"]?.jsonPrimitive?.content
-                            if (eventType == "text_delta") {
-                                val delta = eventObj["delta"]?.jsonPrimitive?.content ?: ""
-                                appendAgentText(delta)
-                            }
+                "message_update" -> {
+                    val eventObj = obj["assistantMessageEvent"]?.jsonObject
+                    if (eventObj != null) {
+                        val eventType = eventObj["type"]?.jsonPrimitive?.content
+                        if (eventType == "text_delta") {
+                            val delta = eventObj["delta"]?.jsonPrimitive?.content ?: ""
+                            appendAgentText(delta)
                         }
                     }
-
-                    "agent_end" -> {
-                        _isAgentBusy.value = false
-                        _currentStatus.value = null
-                        markCurrentAgentDone()
-                    }
                 }
-            } catch (_: Exception) {
-                // 忽略异常行
+
+                "agent_end" -> {
+                    _isAgentBusy.value = false
+                    _currentStatus.value = null
+                    markCurrentAgentDone()
+                    addEventLog(timeStr, "agent_end", "任务已完成 (Agent End)", level = AgentEventLevel.INFO)
+                }
             }
+        } catch (_: Exception) {
+            // 忽略异常 JSON
         }
     }
 
@@ -172,6 +205,18 @@ class OmpAgentClient(
             list[index] = cur.copy(steps = cur.steps + step)
             _messages.value = list
         }
+    }
+
+    private fun addEventLog(timeStr: String, type: String, summary: String, detail: String? = null, level: AgentEventLevel = AgentEventLevel.INFO) {
+        val item = AgentEventLogItem(
+            id = "evt_${System.currentTimeMillis()}_${(0..999).random()}",
+            timeStr = timeStr,
+            type = type,
+            summary = summary,
+            detail = detail,
+            level = level
+        )
+        _eventLogs.value = (_eventLogs.value + item).takeLast(200)
     }
 
     private fun finishStep(toolCallId: String?, result: String?) {
