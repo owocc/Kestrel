@@ -398,8 +398,8 @@ fun ServerCard(
                 Icon(
                     imageVector = serverIcon,
                     contentDescription = null,
-                    // 图标颜色为字体色，提高可见度
-                    tint = titleColor.copy(alpha = if (isDark) 0.35f else 0.28f),
+                    // 图标颜色为字体色，透明度设为 25%
+                    tint = titleColor.copy(alpha = 0.25f),
                     modifier = Modifier
                         .size(80.dp)
                         .align(Alignment.BottomStart)
@@ -537,7 +537,7 @@ fun ServerGridCard(
                 Icon(
                     imageVector = serverIcon,
                     contentDescription = null,
-                    tint = titleColor.copy(alpha = if (isDark) 0.35f else 0.28f),
+                    tint = titleColor.copy(alpha = 0.25f),
                     modifier = Modifier
                         .size(86.dp)
                         .align(Alignment.BottomStart)
