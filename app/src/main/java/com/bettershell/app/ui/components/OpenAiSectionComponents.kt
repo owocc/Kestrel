@@ -14,7 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -25,15 +24,54 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bettershell.app.ui.theme.isAppInDarkTheme
 
 /**
- * 全局通用 OpenAI / 设置风格分组卡片 (Universal Section Card)
- * - 全自动根据 App 当前主题自适应：深色纯正 #1E1E1E，浅色纯正 #F3F4F6
- * - 22dp 大圆角容器
- * - 供【关于页面】、【设置页面】、【服务器设置】、【Agent配置】等全量页面复用！
+ * 卡片在列表中的相对位置模式：
+ * - SINGLE: 单张卡片（全大圆角 22dp）
+ * - TOP: 第一个卡片（顶端大圆角 22dp，底部小圆角 6dp）
+ * - MIDDLE: 中间卡片（全小圆角 6dp）
+ * - BOTTOM: 最后一个卡片（顶端小圆角 6dp，底部大圆角 22dp）
+ */
+enum class CardPosition {
+    SINGLE,
+    TOP,
+    MIDDLE,
+    BOTTOM
+}
+
+/**
+ * 根据卡片所在位置生成对齐最新 ChatGPT Remote 截图的圆角形状：
+ * - 顶部卡片：top = 22dp, bottom = 6dp
+ * - 中间卡片：top = 6dp, bottom = 6dp
+ * - 底部卡片：top = 6dp, bottom = 22dp
+ * - 独立卡片：all = 22dp
+ */
+fun getCardShape(position: CardPosition, largeRadius: Dp = 22.dp, smallRadius: Dp = 6.dp): RoundedCornerShape {
+    return when (position) {
+        CardPosition.SINGLE -> RoundedCornerShape(largeRadius)
+        CardPosition.TOP -> RoundedCornerShape(
+            topStart = largeRadius,
+            topEnd = largeRadius,
+            bottomStart = smallRadius,
+            bottomEnd = smallRadius
+        )
+        CardPosition.MIDDLE -> RoundedCornerShape(smallRadius)
+        CardPosition.BOTTOM -> RoundedCornerShape(
+            topStart = smallRadius,
+            topEnd = smallRadius,
+            bottomStart = largeRadius,
+            bottomEnd = largeRadius
+        )
+    }
+}
+
+/**
+ * 完整对齐 ChatGPT 截图的分组外壳容器 (Section Container)
+ * 带有分组 headerTitle
  */
 @Composable
 fun OpenAiSectionCard(
@@ -42,8 +80,6 @@ fun OpenAiSectionCard(
     headerTitle: String? = null,
     content: @Composable () -> Unit
 ) {
-    val cardBg = if (isDark) Color(0xFF1E1E1E) else Color(0xFFF3F4F6)
-
     Column(modifier = modifier.fillMaxWidth()) {
         if (headerTitle != null) {
             Text(
@@ -54,23 +90,19 @@ fun OpenAiSectionCard(
                 modifier = Modifier.padding(start = 6.dp, bottom = 8.dp)
             )
         }
-
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
-            color = cardBg,
-            shadowElevation = 0.dp
+        Column(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                content()
-            }
+            content()
         }
     }
 }
 
 /**
- * 全局通用设置与详情行条目 (Universal Setting Row Item)
- * - 自动自适应深色/浅色高保真文字与图标颜色
+ * 独立色块条目卡片 (Individual Item Card - 对标 ChatGPT Remote 样式)
+ * - 彻底去除细线分割线！
+ * - 卡片与卡片之间使用垂直间隙 (默认间隔 3.dp)！
+ * - 首张卡片顶部大圆角、底部小圆角；中间卡片全小圆角；末尾卡片底部大圆角！
  */
 @Composable
 fun OpenAiSettingRow(
@@ -79,27 +111,44 @@ fun OpenAiSettingRow(
     subtitle: String? = null,
     icon: ImageVector? = null,
     iconTint: Color = MaterialTheme.colorScheme.onSurface,
-    showDivider: Boolean = true,
+    position: CardPosition = CardPosition.SINGLE,
+    showDivider: Boolean = false, // 遵循最新指令：彻底废弃内嵌分割线，保留参数兼容旧调用
     isDark: Boolean = isAppInDarkTheme,
     trailingText: String? = null,
     showDropdownArrow: Boolean = false,
     showChevron: Boolean = false,
     onClick: (() -> Unit)? = null
 ) {
-    val dividerColor = if (isDark) Color(0xFF2C2D30) else Color(0xFFE5E7EB)
+    val cardBg = if (isDark) Color(0xFF1E1E1E) else Color(0xFFF3F4F6)
     val titleColor = if (isDark) Color(0xFFF3F4F6) else Color(0xFF111827)
     val subtitleColor = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
     val arrowTint = if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    val shape = getCardShape(position)
+
+    // 卡片间距：非 SINGLE 模式下，卡片之间保留 3dp 纯净空隙
+    val bottomSpacing = when (position) {
+        CardPosition.SINGLE -> 0.dp
+        CardPosition.BOTTOM -> 0.dp
+        else -> 3.dp
+    }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = bottomSpacing),
+        shape = shape,
+        color = cardBg,
+        shadowElevation = 0.dp
+    ) {
         Box(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .then(
                     if (onClick != null) Modifier.clickable(onClick = onClick)
                     else Modifier
                 )
-                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .padding(horizontal = 16.dp, vertical = 15.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -121,7 +170,7 @@ fun OpenAiSettingRow(
                     Text(
                         text = title,
                         fontSize = 15.sp,
-                        fontWeight = FontWeight.Normal,
+                        fontWeight = FontWeight.Medium,
                         color = titleColor
                     )
                     if (subtitle != null) {
@@ -164,14 +213,6 @@ fun OpenAiSettingRow(
                     )
                 }
             }
-        }
-
-        if (showDivider) {
-            HorizontalDivider(
-                modifier = Modifier.padding(start = if (icon != null) 50.dp else 16.dp),
-                thickness = 0.8.dp,
-                color = dividerColor
-            )
         }
     }
 }

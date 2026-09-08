@@ -20,13 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bettershell.app.agent.AgentDiscoveryRepository
 import com.bettershell.app.data.ServerConfig
+import com.bettershell.app.ui.components.CardPosition
 import com.bettershell.app.ui.components.LucideIcons
 import com.bettershell.app.ui.components.OpenAiSectionCard
 import com.bettershell.app.ui.components.OpenAiSettingRow
 import com.bettershell.app.ui.components.StandardPageHeader
 
 /**
- * 服务器设置首页 (完全复用全局通用的 OpenAiSectionCard 和 OpenAiSettingRow)
+ * 服务器设置首页 (完全复用全局通用的 OpenAiSectionCard 和 CardPosition)
  */
 @Composable
 fun ServerSettingsScreen(
@@ -71,7 +72,7 @@ fun ServerSettingsScreen(
                     subtitle = "${server.username}@${server.host}:${server.port}",
                     icon = LucideIcons.ServerCog,
                     showChevron = true,
-                    showDivider = false,
+                    position = CardPosition.SINGLE,
                     onClick = onNavigateToBasic
                 )
             }
@@ -85,7 +86,7 @@ fun ServerSettingsScreen(
                     subtitle = "已探测 ${discoveredAgents.size} 个就绪 Agent (omp, claude, aider)",
                     icon = LucideIcons.Asteroid,
                     showChevron = true,
-                    showDivider = false,
+                    position = CardPosition.SINGLE,
                     onClick = onNavigateToAgents
                 )
             }
@@ -99,7 +100,7 @@ fun ServerSettingsScreen(
                     subtitle = if (server.startupScript.isNotBlank()) "已配置自动化指令" else "未配置自动化启动指令",
                     icon = LucideIcons.Terminal,
                     showChevron = true,
-                    showDivider = false,
+                    position = CardPosition.SINGLE,
                     onClick = onNavigateToStartup
                 )
             }

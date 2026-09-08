@@ -15,14 +15,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.bettershell.app.ui.components.CardPosition
 import com.bettershell.app.ui.components.OpenAiSectionCard
 import com.bettershell.app.ui.components.OpenAiSettingRow
 import com.bettershell.app.ui.components.StandardPageHeader
 
 /**
- * 独立的关于页面 (单独进入栈，享受全局预见式返回):
- * - 完全复用全局通用的 OpenAiSectionCard 和 OpenAiSettingRow
- * - 100% 自动对齐全局主题设置，杜绝白块
+ * 独立的关于页面 (对标 ChatGPT Remote 截图的分段独立圆角卡片)
  */
 @Composable
 fun AppAboutScreen(
@@ -52,22 +51,25 @@ fun AppAboutScreen(
             OpenAiSectionCard(
                 headerTitle = "应用信息"
             ) {
+                // 第一个卡片：顶部大圆角，底部小圆角
                 OpenAiSettingRow(
                     title = "BetterShell",
                     subtitle = "版本: 1.0 (Android 16 Ready)",
-                    showDivider = true
+                    position = CardPosition.TOP
                 )
 
+                // 中间卡片：全小圆角
                 OpenAiSettingRow(
                     title = "核心引擎",
                     subtitle = "omp (Oh My Pi) & Multica 多 Agent 架构",
-                    showDivider = true
+                    position = CardPosition.MIDDLE
                 )
 
+                // 最后一个卡片：顶部小圆角，底部大圆角
                 OpenAiSettingRow(
                     title = "开源协议",
                     subtitle = "Apache License 2.0",
-                    showDivider = false
+                    position = CardPosition.BOTTOM
                 )
             }
 

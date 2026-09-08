@@ -1,7 +1,6 @@
 package com.bettershell.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -20,14 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.bettershell.app.data.TerminalFont
 import com.bettershell.app.data.TerminalPreferencesRepository
+import com.bettershell.app.ui.components.CardPosition
 import com.bettershell.app.ui.components.OpenAiSectionCard
 import com.bettershell.app.ui.components.OpenAiSettingRow
 import com.bettershell.app.ui.components.StandardPageHeader
 
 /**
- * 终端代码字体独立设置页面 (完全压入路由栈，享受全局预见式返回与平行滑动):
- * - 纯文本排列，无任何额外图标 (对标用户指令: 字体选项不需要图标，直接显示文本)
- * - 右侧显示选中状态勾勾
+ * 终端代码字体独立设置页面 (对标 ChatGPT Remote 截图的分段独立圆角卡片)
  */
 @Composable
 fun AppFontSettingsScreen(
@@ -35,7 +33,7 @@ fun AppFontSettingsScreen(
     onBack: () -> Unit
 ) {
     val prefs by prefsRepository.preferences.collectAsState()
-    val isDark = com.bettershell.app.ui.theme.isAppInDarkTheme
+    val fonts = TerminalFont.entries
 
     Column(
         modifier = Modifier
@@ -45,8 +43,7 @@ fun AppFontSettingsScreen(
     ) {
         StandardPageHeader(
             title = "终端代码字体",
-            onBack = onBack,
-            isDark = isDark
+            onBack = onBack
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -60,16 +57,21 @@ fun AppFontSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             OpenAiSectionCard(
-                headerTitle = "可用等宽字体",
-                isDark = isDark
+                headerTitle = "可用等宽字体"
             ) {
-                TerminalFont.entries.forEachIndexed { index, font ->
+                fonts.forEachIndexed { index, font ->
+                    val isSelected = prefs.font == font
+                    val position = when (index) {
+                        0 -> CardPosition.TOP
+                        fonts.size - 1 -> CardPosition.BOTTOM
+                        else -> CardPosition.MIDDLE
+                    }
+
                     OpenAiSettingRow(
                         title = font.displayName,
-                        icon = null, // 无图标，直接显示文本
-                        trailingText = if (prefs.font == font) "✓" else null,
-                        showDivider = index < TerminalFont.entries.lastIndex,
-                        isDark = isDark,
+                        subtitle = if (isSelected) "当前正在使用" else null,
+                        trailingText = if (isSelected) "✓" else null,
+                        position = position,
                         onClick = { prefsRepository.updateFont(font) }
                     )
                 }
