@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val repository = ServerRepository(applicationContext)
+        val terminalPrefsRepo = com.bettershell.app.data.TerminalPreferencesRepository(applicationContext)
 
         setContent {
             BetterShellTheme {
@@ -61,6 +62,7 @@ class MainActivity : ComponentActivity() {
                                 SessionScreen(
                                     server = screen.server,
                                     repository = repository,
+                                    prefsRepository = terminalPrefsRepo,
                                     onBack = {
                                         currentScreen = Screen.ServerList
                                     }

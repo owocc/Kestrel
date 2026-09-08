@@ -40,12 +40,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.automirrored.rounded.WrapText
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloseFullscreen
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.FontDownload
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material.icons.rounded.PlayCircle
@@ -53,12 +55,14 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -87,6 +91,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.data.ServerRepository
+import com.bettershell.app.data.TerminalFont
+import com.bettershell.app.data.TerminalPreferences
+import com.bettershell.app.data.TerminalPreferencesRepository
 import com.bettershell.app.terminal.AnsiParser
 import com.bettershell.app.terminal.ConnectionState
 import com.bettershell.app.terminal.TerminalSession
@@ -98,9 +105,11 @@ import kotlinx.coroutines.launch
 fun SessionScreen(
     server: ServerConfig,
     repository: ServerRepository,
+    prefsRepository: TerminalPreferencesRepository,
     onBack: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val terminalPrefs by prefsRepository.preferences.collectAsState()
     var currentServer by remember { mutableStateOf(server) }
 
     val session = remember(currentServer.id) {
@@ -145,6 +154,8 @@ fun SessionScreen(
             SessionTopBar(
                 server = currentServer,
                 connectionState = connectionState,
+                softWrap = terminalPrefs.softWrap,
+                onToggleSoftWrap = { prefsRepository.toggleSoftWrap() },
                 onBack = onBack,
                 onReconnect = { session.connect() },
                 onClear = { session.clearScreen() },
@@ -163,26 +174,31 @@ fun SessionScreen(
                         AnsiParser.parse(rawOutput)
                     }
 
-                    val scrollState = rememberScrollState()
+                    val verticalScrollState = rememberScrollState()
+                    val horizontalScrollState = rememberScrollState()
 
                     LaunchedEffect(rawOutput) {
-                        scrollState.animateScrollTo(scrollState.maxValue)
+                        verticalScrollState.animateScrollTo(verticalScrollState.maxValue)
                     }
 
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .verticalScroll(scrollState)
+                            .verticalScroll(verticalScrollState)
+                            .then(
+                                if (!terminalPrefs.softWrap) Modifier.horizontalScroll(horizontalScrollState) else Modifier
+                            )
                     ) {
                         Text(
                             text = annotatedOutput,
                             style = TextStyle(
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp,
+                                fontFamily = terminalPrefs.font.toComposeFontFamily(),
+                                fontSize = terminalPrefs.fontSizeSp.sp,
+                                lineHeight = (terminalPrefs.fontSizeSp * terminalPrefs.lineSpacingMultiplier).sp,
                                 color = Color(0xFFE5E7EB)
                             ),
-                            modifier = Modifier.fillMaxWidth()
+                            softWrap = terminalPrefs.softWrap,
+                            modifier = if (terminalPrefs.softWrap) Modifier.fillMaxWidth() else Modifier
                         )
                     }
                 }
@@ -225,6 +241,7 @@ fun SessionScreen(
     if (showServerSettingsSheet) {
         ServerSettingsSheet(
             server = currentServer,
+            prefsRepository = prefsRepository,
             onDismiss = { showServerSettingsSheet = false },
             onSave = { updated ->
                 currentServer = updated
@@ -241,6 +258,8 @@ fun SessionScreen(
 fun SessionTopBar(
     server: ServerConfig,
     connectionState: ConnectionState,
+    softWrap: Boolean,
+    onToggleSoftWrap: () -> Unit,
     onBack: () -> Unit,
     onReconnect: () -> Unit,
     onClear: () -> Unit,
@@ -258,7 +277,8 @@ fun SessionTopBar(
         // Left: Back button & Server Info
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
         ) {
             IconButton(onClick = onBack) {
                 Icon(
@@ -277,7 +297,10 @@ fun SessionTopBar(
                         text = server.name,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = DarkOnSurface
+                        color = DarkOnSurface,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
 
                     // Connection Dot Status
@@ -327,6 +350,13 @@ fun SessionTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
+            IconButton(onClick = onToggleSoftWrap) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.WrapText,
+                    contentDescription = if (softWrap) "禁用自动换行" else "启用自动换行",
+                    tint = if (softWrap) AccentGreen else DarkOnSurfaceVariant
+                )
+            }
             if (connectionState is ConnectionState.Disconnected || connectionState is ConnectionState.Error) {
                 IconButton(onClick = onReconnect) {
                     Icon(
@@ -810,15 +840,14 @@ fun PromptChip(
 @Composable
 fun ServerSettingsSheet(
     server: ServerConfig,
+    prefsRepository: TerminalPreferencesRepository,
     onDismiss: () -> Unit,
     onSave: (ServerConfig) -> Unit
 ) {
+    val terminalPrefs by prefsRepository.preferences.collectAsState()
     var startupScript by remember { mutableStateOf(server.startupScript) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
         containerColor = DarkSurface,
         dragHandle = {
             Box(
@@ -862,7 +891,175 @@ fun ServerSettingsSheet(
                 color = DarkOnSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            // Section 1: Terminal Display & Font Settings
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.FontDownload,
+                    contentDescription = null,
+                    tint = AccentCyan,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "终端字体与排版设置",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = DarkOnSurface
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "选择字体 (包含完整 Nerd Font / Powerline 图标):",
+                style = MaterialTheme.typography.bodySmall,
+                color = DarkOnSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TerminalFont.entries.forEach { fontOption ->
+                    val selected = terminalPrefs.font == fontOption
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (selected) DarkPrimary else DarkSurfaceVariant)
+                            .border(1.dp, if (selected) DarkPrimary else DarkOutline, RoundedCornerShape(10.dp))
+                            .clickable { prefsRepository.updateFont(fontOption) }
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = when (fontOption) {
+                                TerminalFont.JETBRAINS_MONO_NERD -> "JetBrains"
+                                TerminalFont.FIRA_CODE_NERD -> "Fira Code"
+                                TerminalFont.SYSTEM_MONOSPACE -> "系统等宽"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selected) Color(0xFF111827) else DarkOnSurface,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Glyph Preview Card
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(TerminalCardBg)
+                    .border(1.dp, DarkOutline, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "图标预览: ❯   src/  ● idle  ✔ pass  󰘬 main  λ ≠",
+                    style = TextStyle(
+                        fontFamily = terminalPrefs.font.toComposeFontFamily(),
+                        fontSize = 12.sp,
+                        color = AccentGreen
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Font Size adjustment
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "字体大小",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = DarkOnSurface
+                    )
+                    Text(
+                        text = "当前: ${terminalPrefs.fontSizeSp.toInt()} sp",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DarkOnSurfaceVariant
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(DarkSurfaceVariant)
+                            .border(1.dp, DarkOutline, CircleShape)
+                            .clickable { prefsRepository.updateFontSize(terminalPrefs.fontSizeSp - 1f) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("-", color = DarkOnSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(DarkSurfaceVariant)
+                            .border(1.dp, DarkOutline, CircleShape)
+                            .clickable { prefsRepository.updateFontSize(terminalPrefs.fontSizeSp + 1f) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("+", color = DarkOnSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Soft Wrap switch
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                    .border(1.dp, DarkOutline, RoundedCornerShape(12.dp))
+                    .clickable { prefsRepository.toggleSoftWrap() }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        text = "自动换行 (Soft Wrap)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = DarkOnSurface
+                    )
+                    Text(
+                        text = if (terminalPrefs.softWrap) "已开启：长行强制折行" else "已关闭（推荐）：允许横向左右滑动，完整保留 CLI 表格与树形排版",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (terminalPrefs.softWrap) AccentOrange else AccentGreen
+                    )
+                }
+
+                Switch(
+                    checked = terminalPrefs.softWrap,
+                    onCheckedChange = { prefsRepository.toggleSoftWrap() }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+            HorizontalDivider(color = DarkOutline)
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Startup Script Editor
             Row(
