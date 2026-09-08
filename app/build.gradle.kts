@@ -10,7 +10,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.bettershell.app"
+        applicationId = "owocc.kestrel"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
