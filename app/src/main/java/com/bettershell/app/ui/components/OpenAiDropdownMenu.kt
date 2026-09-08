@@ -80,7 +80,9 @@ fun OpenAiDropdownMenu(
     modifier: Modifier = Modifier,
     isDark: Boolean = isAppInDarkTheme,
     offset: DpOffset = DpOffset(0.dp, 6.dp),
-    width: Dp = 210.dp
+    width: Dp = 210.dp,
+    alignment: Alignment = Alignment.TopEnd,
+    transformOrigin: TransformOrigin = TransformOrigin(pivotFractionX = 1f, pivotFractionY = 0f)
 ) {
     var isVisible by remember { mutableStateOf(false) }
     val animScale = remember { Animatable(0.75f) }
@@ -144,9 +146,13 @@ fun OpenAiDropdownMenu(
     val menuBg = if (isDark) Color(0xFF1E1E1E) else Color(0xFFFFFFFF)
     val borderColor = if (isDark) Color(0xFF333333) else Color(0xFFE5E7EB)
 
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val offsetX = with(density) { offset.x.roundToPx() }
+    val offsetY = with(density) { offset.y.roundToPx() }
+
     Popup(
-        alignment = Alignment.TopEnd,
-        offset = IntOffset(x = 0, y = 14),
+        alignment = alignment,
+        offset = IntOffset(x = offsetX, y = offsetY),
         onDismissRequest = { dismissWithAnimation() },
         properties = PopupProperties(
             focusable = true,
@@ -240,8 +246,7 @@ fun OpenAiDropdownMenu(
             modifier = modifier
                 .width(width)
                 .graphicsLayer {
-                    // Android 原生 Flip 核心：以右上角 (1f, 0f) 为锚点
-                    transformOrigin = TransformOrigin(pivotFractionX = 1f, pivotFractionY = 0f)
+                    this.transformOrigin = transformOrigin
                     scaleX = effectiveScale
                     scaleY = effectiveScale
                     alpha = effectiveAlpha

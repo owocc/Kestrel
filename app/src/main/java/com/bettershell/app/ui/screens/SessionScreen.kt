@@ -246,7 +246,8 @@ fun SessionScreen(
     val currentAgentStatus by agentRunner.currentStatus.collectAsState()
     val agentRawLogs by agentRunner.rawLogs.collectAsState()
     val agentEventLogs by agentRunner.eventLogs.collectAsState()
-    var showAgentPickerSheet by remember { mutableStateOf(false) }
+    var showSelectAgentSheet by remember { mutableStateOf(false) }
+    var showThinkingLevelSheet by remember { mutableStateOf(false) }
     var chatInputText by remember { mutableStateOf("") }
 
     // 仅监听 Chat 管道解析 JSONL 执行流 (扫描已全量移交首页服务器管理)
@@ -268,7 +269,8 @@ fun SessionScreen(
             showSessionSwitcherSheet ||
             showServerSettingsSheet ||
             showToolsSheet ||
-            showAgentPickerSheet ||
+            showSelectAgentSheet ||
+            showThinkingLevelSheet ||
             isExpandedInput ||
             isImeVisible
 
@@ -279,7 +281,8 @@ fun SessionScreen(
             showSessionSwitcherSheet -> showSessionSwitcherSheet = false
             showServerSettingsSheet -> showServerSettingsSheet = false
             showToolsSheet -> showToolsSheet = false
-            showAgentPickerSheet -> showAgentPickerSheet = false
+            showSelectAgentSheet -> showSelectAgentSheet = false
+            showThinkingLevelSheet -> showThinkingLevelSheet = false
             isExpandedInput -> isExpandedInput = false
             isImeVisible -> {
                 focusManager.clearFocus()
@@ -479,10 +482,15 @@ fun SessionScreen(
                         activeAgent = activeAgent,
                         isAgentBusy = isAgentBusy,
                         isDark = isDark,
-                        onOpenAgentPicker = {
+                        onOpenSelectAgent = {
                             focusManager.clearFocus()
                             keyboardController?.hide()
-                            showAgentPickerSheet = true
+                            showSelectAgentSheet = true
+                        },
+                        onOpenSelectThinkingLevel = {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                            showThinkingLevelSheet = true
                         },
                         onSend = {
                             val promptToSend = chatInputText.trim()
@@ -599,27 +607,25 @@ fun SessionScreen(
             onDismiss = { showAgentLogsSheet = false }
         )
     }
-    // Agent 与模型选择底栏 Sheet (对标 Multica 针对每个工作区/服务器切换 Agent、模型和思考程度)
-    if (showAgentPickerSheet) {
-        AgentPickerBottomSheet(
+    // 1. 独立 Agent 选择弹窗
+    if (showSelectAgentSheet) {
+        com.bettershell.app.ui.components.SelectAgentBottomSheet(
             discoveredAgents = discoveredAgents,
             selectedAgent = activeAgent,
             onSelectAgent = { newAgent ->
                 agentRunner.setAgent(newAgent)
                 agentDiscoveryRepo.saveSelectedAgentId(currentServer.id, newAgent.id)
             },
-            onSelectModel = { newModel ->
-                agentRunner.setModel(newModel)
-                val curId = activeAgent?.id
-                if (curId != null) {
-                    val updated = discoveredAgents.map {
-                        if (it.id == curId) it.copy(selectedModel = newModel) else it
-                    }
-                    discoveredAgents = updated
-                    agentDiscoveryRepo.saveAgents(currentServer.id, updated)
-                }
-            },
-            onSelectThinkingLevel = { newLevel ->
+            onDismiss = { showSelectAgentSheet = false }
+        )
+    }
+
+    // 2. 独立思考程度选择弹窗
+    if (showThinkingLevelSheet) {
+        val currentLevel = activeAgent?.thinkingLevel ?: com.bettershell.app.agent.ThinkingLevel.AUTO
+        com.bettershell.app.ui.components.SelectThinkingLevelBottomSheet(
+            currentLevel = currentLevel,
+            onSelectLevel = { newLevel ->
                 agentRunner.setThinkingLevel(newLevel)
                 val curId = activeAgent?.id
                 if (curId != null) {
@@ -630,7 +636,7 @@ fun SessionScreen(
                     agentDiscoveryRepo.saveAgents(currentServer.id, updated)
                 }
             },
-            onDismiss = { showAgentPickerSheet = false }
+            onDismiss = { showThinkingLevelSheet = false }
         )
     }
     if (showSessionSwitcherSheet) {

@@ -67,8 +67,8 @@ fun ChatIntegratedInputBar(
     activeAgent: DiscoveredAgent?,
     isAgentBusy: Boolean,
     isDark: Boolean,
-    onOpenAgentPicker: () -> Unit,
-    onToggleDeepThinking: () -> Unit = {},
+    onOpenSelectAgent: () -> Unit,
+    onOpenSelectThinkingLevel: () -> Unit,
     onSend: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -158,23 +158,25 @@ fun ChatIntegratedInputBar(
                             )
                         }
 
-                        // 截图 3 规范的超大圆角 Popover 菜单
+                        // 底部与左下角严格对齐 '+' 按钮的大圆角 Popover 菜单
                         OpenAiDropdownMenu(
                             expanded = showPlusMenu,
                             onDismissRequest = { showPlusMenu = false },
-                            offset = DpOffset(0.dp, (-14).dp),
+                            alignment = Alignment.BottomStart,
+                            offset = DpOffset(x = 0.dp, y = (-42).dp),
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(pivotFractionX = 0f, pivotFractionY = 1f),
                             width = 220.dp,
                             isDark = isDark,
                             items = listOf(
                                 OpenAiMenuItemData(
                                     title = "选择 Agent",
                                     icon = LucideIcons.Bot,
-                                    onClick = onOpenAgentPicker
+                                    onClick = onOpenSelectAgent
                                 ),
                                 OpenAiMenuItemData(
-                                    title = "更深入思考",
+                                    title = "思考程度",
                                     icon = LucideIcons.Brain,
-                                    onClick = onToggleDeepThinking
+                                    onClick = onOpenSelectThinkingLevel
                                 ),
                                 OpenAiMenuItemData(
                                     title = "插入文件路径",
@@ -195,7 +197,7 @@ fun ChatIntegratedInputBar(
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = (if (isDark) Color(0xFF2B2B2B) else Color(0xFFE5E7EB)).copy(alpha = 0.7f),
-                            modifier = Modifier.clickable(onClick = onOpenAgentPicker)
+                            modifier = Modifier.clickable(onClick = onOpenSelectAgent)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
