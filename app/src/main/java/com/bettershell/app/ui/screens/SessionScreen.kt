@@ -205,31 +205,49 @@ fun SessionScreen(
     val halfScreenHeightDp = screenHeightDp * 0.5f
 
     // Dynamically track user's real soft keyboard height (starts at 290dp)
+    // Guarded to only update when keyboard is fully open (> 200dp) to prevent closing-animation corruption!
     var keyboardHeightDp by remember { mutableStateOf(290.dp) }
-    LaunchedEffect(currentImeBottomPx) {
-        if (currentImeBottomPx > 150) {
-            keyboardHeightDp = with(density) { currentImeBottomPx.toDp() }
+    LaunchedEffect(currentImeBottomDp) {
+        if (currentImeBottomDp > 200.dp && currentImeBottomDp > keyboardHeightDp) {
+            keyboardHeightDp = currentImeBottomDp
         }
     }
 
-    var showTools by remember { mutableStateOf(false) }
+    var isToolsOpen by remember { mutableStateOf(false) }
+    var isKeyboardCoveringTools by remember { mutableStateOf(false) }
     var isExpandedHalfScreen by remember { mutableStateOf(false) }
 
-    val toolsTargetHeightDp = if (isExpandedHalfScreen) halfScreenHeightDp else keyboardHeightDp
-    val toolsHeightAnimatable = remember { androidx.compose.animation.core.Animatable(0f) }
-
-    LaunchedEffect(showTools, isExpandedHalfScreen, keyboardHeightDp) {
-        val target = if (showTools) toolsTargetHeightDp.value else 0f
-        toolsHeightAnimatable.animateTo(
-            targetValue = target,
-            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
-        )
+    // Clear handoff flag as soon as keyboard is open
+    LaunchedEffect(isKeyboardOpen) {
+        if (isKeyboardOpen) {
+            isKeyboardCoveringTools = false
+        }
     }
 
-    val currentToolsHeightDp = toolsHeightAnimatable.value.dp
-    // Z-axis Overlap Math: when switching between keyboard and tools, height remains constant!
-    val bottomPlaceholderHeight = maxOf(currentImeBottomDp, currentToolsHeightDp)
+    val toolsTargetHeightDp = if (isExpandedHalfScreen) halfScreenHeightDp else keyboardHeightDp
 
+    val animatedToolsHeightDp by animateDpAsState(
+        targetValue = when {
+            isToolsOpen -> toolsTargetHeightDp
+            isKeyboardCoveringTools -> keyboardHeightDp
+            else -> 0.dp
+        },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "toolsHeight"
+    )
+
+    // Bottom container height:
+    // When keyboard is open: follows keyboard directly
+    // When tools are open: follows animatedToolsHeightDp
+    // When both closed: strictly 0.dp!
+    val bottomContainerHeight = if (isKeyboardOpen) {
+        currentImeBottomDp
+    } else {
+        animatedToolsHeightDp
+    }
     // Hierarchical back handling
     BackHandler(enabled = true) {
         when {
@@ -245,13 +263,15 @@ fun SessionScreen(
             isExpandedInput -> {
                 isExpandedInput = false
             }
-            showTools -> {
-                showTools = false
-                isExpandedHalfScreen = false
-            }
             isKeyboardOpen -> {
                 focusManager.clearFocus()
                 keyboardController?.hide()
+                isKeyboardCoveringTools = false
+            }
+            isToolsOpen -> {
+                isToolsOpen = false
+                isExpandedHalfScreen = false
+                isKeyboardCoveringTools = false
             }
             else -> {
                 onBack()
@@ -459,24 +479,26 @@ fun SessionScreen(
                     GoogleMessagesInputBar(
                         text = inputText,
                         onTextChanged = { inputText = it },
-                        isToolsExpanded = showTools,
+                        isToolsExpanded = isToolsOpen && !isKeyboardOpen,
                         onToggleTools = {
-                            if (!showTools) {
+                            if (!isToolsOpen) {
                                 focusManager.clearFocus()
                                 keyboardController?.hide()
-                                coroutineScope.launch {
-                                    // 0-frame handoff: instantly match keyboard height so input bar doesn't bounce/drop
-                                    toolsHeightAnimatable.snapTo(keyboardHeightDp.value)
-                                    showTools = true
-                                }
+                                isToolsOpen = true
+                                isKeyboardCoveringTools = false
                             } else {
-                                showTools = false
+                                isToolsOpen = false
                                 isExpandedHalfScreen = false
+                                isKeyboardCoveringTools = false
                             }
                         },
                         onExpandInput = { isExpandedInput = true },
                         onInputFocused = {
-                            // Seamless handoff: keyboard opens and covers tools container on Z-axis with zero drop!
+                            if (isToolsOpen) {
+                                isToolsOpen = false
+                                isExpandedHalfScreen = false
+                                isKeyboardCoveringTools = true
+                            }
                         },
                         onSend = {
                             if (inputText.isNotBlank()) {
@@ -487,56 +509,25 @@ fun SessionScreen(
                     )
 
                     // Z-axis Overlap Placeholder Container
-                    if (bottomPlaceholderHeight > 0.dp) {
+                    if (bottomContainerHeight > 0.dp) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(bottomPlaceholderHeight)
+                                .height(bottomContainerHeight)
                         ) {
-                            // Tools are positioned under the keyboard on the Z-axis
-                            if (showTools && currentToolsHeightDp > 10.dp) {
-                                val toolsAlpha = if (currentImeBottomDp > 50.dp) 0f else 1f
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .alpha(toolsAlpha)
-                                ) {
-                                    GoogleMessagesToolsDrawer(
+                            // Only render tools drawer if tools are active and keyboard is not open
+                            val shouldRenderTools = isToolsOpen && !isKeyboardOpen && bottomContainerHeight > 20.dp
+                            if (shouldRenderTools) {
+                                GoogleMessagesToolsDrawer(
                                         onDragDelta = { delta ->
-                                            coroutineScope.launch {
-                                                val maxPx = with(density) { halfScreenHeightDp.toPx() }
-                                                val currentPx = with(density) { toolsHeightAnimatable.value.dp.toPx() }
-                                                val newPx = (currentPx - delta).coerceIn(0f, maxPx)
-                                                toolsHeightAnimatable.snapTo(with(density) { newPx.toDp().value })
+                                            if (delta > 25f) {
+                                                isToolsOpen = false
+                                                isExpandedHalfScreen = false
+                                            } else if (delta < -25f) {
+                                                isExpandedHalfScreen = true
                                             }
                                         },
-                                        onDragEnd = {
-                                            val currentDp = toolsHeightAnimatable.value.dp
-                                            val defaultDp = keyboardHeightDp
-                                            val target = when {
-                                                currentDp > (defaultDp + halfScreenHeightDp) / 2f -> {
-                                                    isExpandedHalfScreen = true
-                                                    showTools = true
-                                                    halfScreenHeightDp.value
-                                                }
-                                                currentDp > defaultDp / 2f -> {
-                                                    isExpandedHalfScreen = false
-                                                    showTools = true
-                                                    defaultDp.value
-                                                }
-                                                else -> {
-                                                    isExpandedHalfScreen = false
-                                                    showTools = false
-                                                    0f
-                                                }
-                                            }
-                                            coroutineScope.launch {
-                                                toolsHeightAnimatable.animateTo(
-                                                    targetValue = target,
-                                                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
-                                                )
-                                            }
-                                        },
+                                        onDragEnd = {},
                                         onToggleExpand = {
                                             isExpandedHalfScreen = !isExpandedHalfScreen
                                         },
@@ -547,21 +538,23 @@ fun SessionScreen(
                                                     terminalSession.sendCommand(line)
                                                 }
                                             }
-                                            showTools = false
+                                            isToolsOpen = false
+                                            isExpandedHalfScreen = false
                                         },
                                         onInsertCommand = { cmd ->
                                             inputText = cmd
-                                            showTools = false
+                                            isToolsOpen = false
+                                            isExpandedHalfScreen = false
                                         },
                                         onInsertSymbol = { sym ->
                                             inputText += sym
                                         },
                                         onClearTerminal = {
                                             terminalSession.clearScreen()
-                                            showTools = false
+                                            isToolsOpen = false
+                                            isExpandedHalfScreen = false
                                         }
-                                    )
-                                }
+                                )
                             }
                         }
                     }
