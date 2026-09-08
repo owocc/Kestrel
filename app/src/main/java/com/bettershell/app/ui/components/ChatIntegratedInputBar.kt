@@ -249,22 +249,13 @@ fun ChatIntegratedInputBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 7.dp, start = 8.dp, end = 8.dp),
-                horizontalArrangement = Arrangement.Center,
+                    .padding(top = 8.dp, start = 8.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 呼吸/活跃圆点指示灯
-                Box(
-                    modifier = Modifier
-                        .size(5.dp)
-                        .clip(CircleShape)
-                        .background(if (isAgentBusy) Color(0xFF10B981) else Color(0xFF9CA3AF).copy(alpha = 0.6f))
-                )
-
-                Spacer(modifier = Modifier.size(6.dp))
-
+                // 左侧：纯文本 Agent 和模型 (无任何多余装饰符号)
                 Text(
-                    text = "${meta.displayName} · $modelText · $thinkingText",
+                    text = "${meta.displayName} · $modelText",
                     style = TextStyle(
                         fontFamily = FontFamily.Default,
                         fontSize = 12.sp,
@@ -272,7 +263,20 @@ fun ChatIntegratedInputBar(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f)
                     ),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                // 右侧：思考程度
+                Text(
+                    text = thinkingText,
+                    style = TextStyle(
+                        fontFamily = FontFamily.Default,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f)
+                    ),
+                    maxLines = 1
                 )
             }
         }
