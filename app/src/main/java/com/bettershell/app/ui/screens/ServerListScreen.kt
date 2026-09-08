@@ -402,8 +402,8 @@ fun ServerCard(
                     modifier = Modifier
                         .size(80.dp)
                         .align(Alignment.BottomStart)
-                        .offset(x = 10.dp, y = 6.dp) // 进入画面更多，清晰可见
-                        .rotate(25f) // 25度旋转
+                        .offset(x = 10.dp, y = 6.dp)
+                        .rotate(-25f) // 反方向 -25度旋转
                 )
             }
 
@@ -539,8 +539,8 @@ fun ServerGridCard(
                     modifier = Modifier
                         .size(86.dp)
                         .align(Alignment.BottomStart)
-                        .offset(x = 10.dp, y = 6.dp) // 进入画面更多，清晰可见
-                        .rotate(25f)
+                        .offset(x = 10.dp, y = 6.dp)
+                        .rotate(-25f) // 反方向 -25度旋转
                 )
             }
 
