@@ -264,32 +264,26 @@ fun SessionScreen(
     val isImeVisible = WindowInsets.isImeVisible
     val bottomNavPadding = if (isImeVisible) 0.dp else navBottomDp
     // Hierarchical back handling
-    BackHandler(enabled = true) {
+    val hasLocalOverlay = sessionToRename != null ||
+            showSessionSwitcherSheet ||
+            showServerSettingsSheet ||
+            showToolsSheet ||
+            showAgentPickerSheet ||
+            isExpandedInput ||
+            isImeVisible
+
+    // 仅在存在局部弹窗或软键盘时启用局部 BackHandler 优先拦截关闭弹窗；无局部状态时放行给全局 PredictiveBack
+    BackHandler(enabled = hasLocalOverlay) {
         when {
-            sessionToRename != null -> {
-                sessionToRename = null
-            }
-            showSessionSwitcherSheet -> {
-                showSessionSwitcherSheet = false
-            }
-            showServerSettingsSheet -> {
-                showServerSettingsSheet = false
-            }
-            showToolsSheet -> {
-                showToolsSheet = false
-            }
-            showAgentPickerSheet -> {
-                showAgentPickerSheet = false
-            }
-            isExpandedInput -> {
-                isExpandedInput = false
-            }
+            sessionToRename != null -> sessionToRename = null
+            showSessionSwitcherSheet -> showSessionSwitcherSheet = false
+            showServerSettingsSheet -> showServerSettingsSheet = false
+            showToolsSheet -> showToolsSheet = false
+            showAgentPickerSheet -> showAgentPickerSheet = false
+            isExpandedInput -> isExpandedInput = false
             isImeVisible -> {
                 focusManager.clearFocus()
                 keyboardController?.hide()
-            }
-            else -> {
-                onBack()
             }
         }
     }

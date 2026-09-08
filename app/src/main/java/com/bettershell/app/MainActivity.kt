@@ -1,23 +1,14 @@
 package com.bettershell.app
 
-import kotlinx.coroutines.launch
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,10 +18,20 @@ import androidx.compose.ui.Modifier
 import com.bettershell.app.agent.DiscoveredAgent
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.data.ServerRepository
+import com.bettershell.app.navigation.NavigationStackHost
+import com.bettershell.app.ui.screens.AppAboutScreen
+import com.bettershell.app.ui.screens.AppFontSettingsScreen
+import com.bettershell.app.ui.screens.AppSettingsScreen
+import com.bettershell.app.ui.screens.RawLogsScreen
+import com.bettershell.app.ui.screens.ServerAgentSettingsScreen
+import com.bettershell.app.ui.screens.ServerBasicSettingsScreen
 import com.bettershell.app.ui.screens.ServerListScreen
+import com.bettershell.app.ui.screens.ServerSettingsScreen
+import com.bettershell.app.ui.screens.ServerStartupScriptScreen
 import com.bettershell.app.ui.screens.SessionScreen
+import com.bettershell.app.ui.screens.SingleAgentConfigScreen
 import com.bettershell.app.ui.theme.BetterShellTheme
-import com.bettershell.app.ui.theme.TerminalBlack
+import kotlinx.coroutines.launch
 
 sealed interface Screen {
     data object ServerList : Screen
@@ -64,9 +65,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val coroutineScope = rememberCoroutineScope()
-                    // 屏幕路由栈：每一次点击进入新的子页面，完全压入栈中！
                     var screenStack by remember { mutableStateOf<List<Screen>>(listOf(Screen.ServerList)) }
-                    val currentScreen = screenStack.last()
 
                     fun pushScreen(screen: Screen) {
                         screenStack = screenStack + screen
@@ -78,9 +77,8 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // 统一的页面 Composable 渲染器
                     @Composable
-                    fun RenderScreen(screen: Screen, onBackAction: () -> Unit) {
+                    fun ScreenRenderer(screen: Screen, onBackAction: () -> Unit) {
                         when (screen) {
                             is Screen.ServerList -> {
                                 ServerListScreen(
@@ -96,7 +94,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             is Screen.AppSettings -> {
-                                com.bettershell.app.ui.screens.AppSettingsScreen(
+                                AppSettingsScreen(
                                     prefsRepository = terminalPrefsRepo,
                                     onNavigateToFontSettings = { pushScreen(Screen.AppFontSettings) },
                                     onNavigateToAbout = { pushScreen(Screen.AppAbout) },
@@ -104,18 +102,18 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             is Screen.AppFontSettings -> {
-                                com.bettershell.app.ui.screens.AppFontSettingsScreen(
+                                AppFontSettingsScreen(
                                     prefsRepository = terminalPrefsRepo,
                                     onBack = onBackAction
                                 )
                             }
                             is Screen.AppAbout -> {
-                                com.bettershell.app.ui.screens.AppAboutScreen(
+                                AppAboutScreen(
                                     onBack = onBackAction
                                 )
                             }
                             is Screen.ServerSettings -> {
-                                com.bettershell.app.ui.screens.ServerSettingsScreen(
+                                ServerSettingsScreen(
                                     server = screen.server,
                                     agentDiscoveryRepo = agentDiscoveryRepo,
                                     onNavigateToBasic = { pushScreen(Screen.ServerBasicSettings(screen.server)) },
@@ -125,7 +123,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             is Screen.ServerBasicSettings -> {
-                                com.bettershell.app.ui.screens.ServerBasicSettingsScreen(
+                                ServerBasicSettingsScreen(
                                     server = screen.server,
                                     onSaveServer = { updatedServer ->
                                         coroutineScope.launch {
@@ -136,7 +134,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             is Screen.ServerAgentSettings -> {
-                                com.bettershell.app.ui.screens.ServerAgentSettingsScreen(
+                                ServerAgentSettingsScreen(
                                     server = screen.server,
                                     agentDiscoveryRepo = agentDiscoveryRepo,
                                     onNavigateToSingleAgent = { agent ->
@@ -146,7 +144,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             is Screen.SingleAgentConfig -> {
-                                com.bettershell.app.ui.screens.SingleAgentConfigScreen(
+                                SingleAgentConfigScreen(
                                     agent = screen.agent,
                                     onSaveAgent = { updatedAgent ->
                                         val currentAgents = agentDiscoveryRepo.getCachedAgents(screen.server.id)
@@ -157,7 +155,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             is Screen.ServerStartupScript -> {
-                                com.bettershell.app.ui.screens.ServerStartupScriptScreen(
+                                ServerStartupScriptScreen(
                                     server = screen.server,
                                     onSaveServer = { updatedServer ->
                                         coroutineScope.launch {
@@ -183,7 +181,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             is Screen.RawLogs -> {
-                                com.bettershell.app.ui.screens.RawLogsScreen(
+                                RawLogsScreen(
                                     rawLogs = screen.logs,
                                     onBack = onBackAction
                                 )
@@ -191,38 +189,14 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // 全局预见式返回与右进右出平行转场 (针对所有路由栈页面通用！)
-                    if (screenStack.size > 1) {
-                        val previousScreen = screenStack[screenStack.size - 2]
-                        com.bettershell.app.ui.components.PredictiveBackContainer(
-                            enabled = true,
-                            onBack = { popScreen() },
-                            previousContent = {
-                                RenderScreen(screen = previousScreen, onBackAction = {})
-                            }
-                        ) {
-                            AnimatedContent(
-                                targetState = currentScreen,
-                                transitionSpec = {
-                                    (slideInHorizontally(
-                                        initialOffsetX = { fullWidth -> fullWidth },
-                                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                                    ) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
-                                    .togetherWith(
-                                        slideOutHorizontally(
-                                            targetOffsetX = { fullWidth -> -fullWidth / 3 },
-                                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-                                        ) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-                                    )
-                                },
-                                label = "subScreenTransition"
-                            ) { screen ->
-                                RenderScreen(screen = screen, onBackAction = { popScreen() })
-                            }
+                    // 全局聚合导航器：彻底融合手势与编程式转场
+                    NavigationStackHost(
+                        stack = screenStack,
+                        onPop = { popScreen() },
+                        renderScreen = { screen, onBack ->
+                            ScreenRenderer(screen = screen, onBackAction = onBack)
                         }
-                    } else {
-                        RenderScreen(screen = currentScreen, onBackAction = {})
-                    }
+                    )
                 }
             }
         }
