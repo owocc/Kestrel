@@ -2,7 +2,10 @@ package com.bettershell.app.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -15,10 +18,10 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,19 +48,21 @@ import androidx.compose.material.icons.automirrored.rounded.WrapText
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.CloseFullscreen
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.FontDownload
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -89,6 +94,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -97,11 +103,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.bettershell.app.data.AppThemeMode
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.data.ServerRepository
@@ -158,8 +163,8 @@ fun SessionScreen(
     }
 
     var inputText by remember { mutableStateOf("") }
-    var isFullscreenInput by remember { mutableStateOf(false) }
-    var showMoreActions by remember { mutableStateOf(false) }
+    var isExpandedInput by remember { mutableStateOf(false) }
+    var showToolsDrawer by remember { mutableStateOf(false) }
     var showServerSettingsSheet by remember { mutableStateOf(false) }
     var showSessionSwitcherSheet by remember { mutableStateOf(false) }
     var sessionToRename by remember { mutableStateOf<ServerSessionItem?>(null) }
@@ -186,11 +191,11 @@ fun SessionScreen(
             showServerSettingsSheet -> {
                 showServerSettingsSheet = false
             }
-            isFullscreenInput -> {
-                isFullscreenInput = false
+            isExpandedInput -> {
+                isExpandedInput = false
             }
-            showMoreActions -> {
-                showMoreActions = false
+            showToolsDrawer -> {
+                showToolsDrawer = false
             }
             isKeyboardOpen -> {
                 focusManager.clearFocus()
@@ -202,6 +207,7 @@ fun SessionScreen(
         }
     }
 
+    // Root Container: Layered architecture (Shell layer + Floating Input Layer)
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -210,6 +216,7 @@ fun SessionScreen(
             .navigationBarsPadding()
             .imePadding()
     ) {
+        // Layer 1: Shell & Terminal Layer (Underneath)
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
@@ -236,12 +243,12 @@ fun SessionScreen(
                 onOpenSettings = { showServerSettingsSheet = true }
             )
 
-            // Virtual Terminal View Area (VT Buffer with in-place line rewrite and 2D scroll + Pinch zoom)
+            // 2D Scroll Terminal View Area (With bottom padding for collapsed input bar)
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
                     .pointerInput(terminalPrefs.fontSizeSp) {
                         awaitEachGesture {
                             var initialDistance = 0f
@@ -296,17 +303,22 @@ fun SessionScreen(
                                 if (!terminalPrefs.softWrap) Modifier.horizontalScroll(horizontalScrollState) else Modifier
                             )
                     ) {
-                        Text(
-                            text = displayOutput,
-                            style = TextStyle(
-                                fontFamily = terminalPrefs.font.toComposeFontFamily(),
-                                fontSize = terminalPrefs.fontSizeSp.sp,
-                                lineHeight = (terminalPrefs.fontSizeSp * terminalPrefs.lineSpacingMultiplier).sp,
-                                color = if (isDark) Color(0xFFE5E7EB) else Color(0xFF1F2328)
-                            ),
-                            softWrap = terminalPrefs.softWrap,
-                            modifier = if (terminalPrefs.softWrap) Modifier.fillMaxWidth() else Modifier
-                        )
+                        Column {
+                            Text(
+                                text = displayOutput,
+                                style = TextStyle(
+                                    fontFamily = terminalPrefs.font.toComposeFontFamily(),
+                                    fontSize = terminalPrefs.fontSizeSp.sp,
+                                    lineHeight = (terminalPrefs.fontSizeSp * terminalPrefs.lineSpacingMultiplier).sp,
+                                    color = if (isDark) Color(0xFFE5E7EB) else Color(0xFF1F2328)
+                                ),
+                                softWrap = terminalPrefs.softWrap,
+                                modifier = if (terminalPrefs.softWrap) Modifier.fillMaxWidth() else Modifier
+                            )
+
+                            // Bottom padding so terminal text is not obscured by the collapsed bottom input bar
+                            Spacer(modifier = Modifier.height(115.dp))
+                        }
                     }
                 }
 
@@ -346,71 +358,88 @@ fun SessionScreen(
                     }
                 }
             }
+        }
 
-            // More Actions Panel (Toggled via '+' button, flat design)
-            androidx.compose.animation.AnimatedVisibility(
-                visible = showMoreActions,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                MoreActionsPanel(
-                    hasStartupScript = currentServer.startupScript.isNotBlank(),
-                    onRunStartupScript = {
-                        if (currentServer.startupScript.isNotBlank()) {
-                            for (line in currentServer.startupScript.lines().filter { it.isNotBlank() && !it.startsWith("#") }) {
-                                terminalSession.sendCommand(line)
+        // Layer 2: Floating Input System (Overlaid at bottom)
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+        ) {
+            if (isExpandedInput) {
+                // Expanded Input State (Image #5 / #6)
+                // Overlays ~55% of the screen while terminal remains visible in top half
+                ExpandedInputSheet(
+                    text = inputText,
+                    onTextChanged = { inputText = it },
+                    fontFamily = terminalPrefs.font.toComposeFontFamily(),
+                    onCollapse = { isExpandedInput = false },
+                    onSend = {
+                        if (inputText.isNotBlank()) {
+                            terminalSession.sendCommand(inputText)
+                            inputText = ""
+                            isExpandedInput = false
+                        }
+                    }
+                )
+            } else {
+                // Default State & Tool Drawer (Image #1, #2, #3, #4)
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Quick Shortcut Bar (ENTER, ESC, TAB, CTRL-C, CTRL-D, Arrows)
+                    QuickShortcutBar(
+                        onSendRaw = { terminalSession.sendRaw(it) },
+                        onInsertText = { inputText += it }
+                    )
+
+                    // Google Messages Style Input Bar (Image #1, #4)
+                    GoogleMessagesInputBar(
+                        text = inputText,
+                        onTextChanged = { inputText = it },
+                        isToolsExpanded = showToolsDrawer,
+                        onToggleTools = { showToolsDrawer = !showToolsDrawer },
+                        onExpandInput = { isExpandedInput = true },
+                        onSend = {
+                            if (inputText.isNotBlank()) {
+                                terminalSession.sendCommand(inputText)
+                                inputText = ""
                             }
                         }
-                    },
-                    onQuickPrompt = { prompt ->
-                        inputText = prompt
-                    },
-                    onInsertSymbol = { symbol ->
-                        inputText += symbol
-                    },
-                    onClose = { showMoreActions = false }
-                )
-            }
+                    )
 
-            // Quick Shortcut Bar (ENTER, ESC, TAB, CTRL-C, CTRL-D, Arrows)
-            QuickShortcutBar(
-                onSendRaw = { terminalSession.sendRaw(it) },
-                onInsertText = { inputText += it }
-            )
-
-            // Google Messages style Chat Input Bar (Clean, zero shadow, flat capsule design)
-            GoogleMessagesInputBar(
-                text = inputText,
-                onTextChanged = { inputText = it },
-                isActionsExpanded = showMoreActions,
-                onToggleActions = { showMoreActions = !showMoreActions },
-                onOpenFullscreen = { isFullscreenInput = true },
-                onSend = {
-                    if (inputText.isNotBlank()) {
-                        terminalSession.sendCommand(inputText)
-                        inputText = ""
+                    // Tools Drawer (Image #2 / #3)
+                    AnimatedVisibility(
+                        visible = showToolsDrawer,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        GoogleMessagesToolsDrawer(
+                            hasStartupScript = currentServer.startupScript.isNotBlank(),
+                            onRunStartupScript = {
+                                if (currentServer.startupScript.isNotBlank()) {
+                                    for (line in currentServer.startupScript.lines().filter { it.isNotBlank() && !it.startsWith("#") }) {
+                                        terminalSession.sendCommand(line)
+                                    }
+                                }
+                                showToolsDrawer = false
+                            },
+                            onInsertCommand = { cmd ->
+                                inputText = cmd
+                                showToolsDrawer = false
+                            },
+                            onInsertSymbol = { sym ->
+                                inputText += sym
+                            },
+                            onClearTerminal = {
+                                terminalSession.clearScreen()
+                                showToolsDrawer = false
+                            }
+                        )
                     }
                 }
-            )
+            }
         }
-    }
-
-    // Fullscreen Input Dialog
-    if (isFullscreenInput) {
-        FullscreenInputDialog(
-            text = inputText,
-            onTextChanged = { inputText = it },
-            fontFamily = terminalPrefs.font.toComposeFontFamily(),
-            onSendRaw = { terminalSession.sendRaw(it) },
-            onSend = {
-                if (inputText.isNotBlank()) {
-                    terminalSession.sendCommand(inputText)
-                    inputText = ""
-                }
-                isFullscreenInput = false
-            },
-            onDismiss = { isFullscreenInput = false }
-        )
     }
 
     // Session Switcher Bottom Sheet
@@ -493,7 +522,6 @@ fun SessionTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Left: Back button & Server / Session Info (Clickable for session switcher)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -534,7 +562,6 @@ fun SessionTopBar(
                         modifier = Modifier.size(18.dp)
                     )
 
-                    // Connection Status Pill
                     val (dotColor, statusText) = when (connectionState) {
                         is ConnectionState.Connected -> AccentGreen to "已连接"
                         is ConnectionState.Connecting -> AccentOrange to "连接中"
@@ -576,7 +603,6 @@ fun SessionTopBar(
             }
         }
 
-        // Right Action buttons
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -627,50 +653,43 @@ fun SessionTopBar(
 }
 
 /**
- * Google Messages style Chat Input Bar
- * Left: '+' Circle button
- * Center: Rounded pill text box with maximize/expand button at trailing position
- * Right: Circle Send button
- * Flat, zero shadow, minimalist
+ * Google Messages Style Chat Input Bar (Image #1, #3, #4)
+ * - Left: '+' circular button (toggles tools drawer)
+ * - Center: Full-round pill input box. When text is present/multi-line, shows expand button at emoji position!
+ * - Right: Circular Send button
+ * - Flat, zero shadow, minimalist
  */
 @Composable
 fun GoogleMessagesInputBar(
     text: String,
     onTextChanged: (String) -> Unit,
-    isActionsExpanded: Boolean,
-    onToggleActions: () -> Unit,
-    onOpenFullscreen: () -> Unit,
+    isToolsExpanded: Boolean,
+    onToggleTools: () -> Unit,
+    onExpandInput: () -> Unit,
     onSend: () -> Unit
 ) {
-    val rotateAngle by animateFloatAsState(
-        targetValue = if (isActionsExpanded) 45f else 0f,
-        label = "plusRotate"
-    )
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, bottom = 8.dp, top = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(start = 12.dp, end = 12.dp, bottom = 8.dp, top = 2.dp),
+        verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Left: Circular '+' Button (expand actions)
+        // Left: Circular '+' Button (Toggles Tools Drawer, turns to '×' when open)
         Box(
             modifier = Modifier
                 .size(46.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                .clickable(onClick = onToggleActions),
+                .clickable(onClick = onToggleTools),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Rounded.Add,
-                contentDescription = "展开更多操作",
+                imageVector = if (isToolsExpanded) Icons.Rounded.Close else Icons.Rounded.Add,
+                contentDescription = "工具与指令",
                 tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .size(24.dp)
-                    .rotate(rotateAngle)
+                modifier = Modifier.size(22.dp)
             )
         }
 
@@ -679,10 +698,10 @@ fun GoogleMessagesInputBar(
             modifier = Modifier
                 .weight(1f)
                 .heightIn(min = 46.dp, max = 110.dp)
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                .padding(start = 16.dp, end = 6.dp),
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp))
+                .padding(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             Row(
@@ -712,6 +731,7 @@ fun GoogleMessagesInputBar(
                         textStyle = TextStyle(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 14.sp,
+                            lineHeight = 20.sp,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium
                         ),
@@ -721,17 +741,20 @@ fun GoogleMessagesInputBar(
                     )
                 }
 
-                // Trailing Expand/Maximize button (Positioned where Emoji is in Google Messages)
-                IconButton(
-                    onClick = onOpenFullscreen,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.OpenInFull,
-                        contentDescription = "全屏输入",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(17.dp)
-                    )
+                // Trailing Expand Button (Positioned at Emoji location as requested by user in Image #4/#5!)
+                // Visible when text has content or multi-line
+                if (text.isNotEmpty()) {
+                    IconButton(
+                        onClick = onExpandInput,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.OpenInFull,
+                            contentDescription = "展开全屏输入",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
                 }
             }
         }
@@ -759,101 +782,135 @@ fun GoogleMessagesInputBar(
 }
 
 /**
- * Flat More Actions Panel
- * Displayed when clicking the '+' button
- * Zero shadow, clean flat styling
+ * Expanded Input Sheet (Image #5 / #6)
+ * - Layered over bottom ~55% of the screen (terminal remains visible in top ~45%)
+ * - Top-left: '⌄' collapse button
+ * - Center: Large multi-line editor with monospace font
+ * - Bottom-right: Circular Send button
+ * - Clean, flat, zero shadow, toolbars collapsed
  */
 @Composable
-fun MoreActionsPanel(
-    hasStartupScript: Boolean,
-    onRunStartupScript: () -> Unit,
-    onQuickPrompt: (String) -> Unit,
-    onInsertSymbol: (String) -> Unit,
-    onClose: () -> Unit
+fun ExpandedInputSheet(
+    text: String,
+    onTextChanged: (String) -> Unit,
+    fontFamily: FontFamily,
+    onCollapse: () -> Unit,
+    onSend: () -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
+            .height(380.dp),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         shadowElevation = 0.dp
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
+            // Header: Down chevron (⌄) to collapse, title info, and clear button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "快捷指令与操作",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "Close",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clickable(onClick = onClose)
-                )
-            }
-
-            // Quick Prompts Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (hasStartupScript) {
-                    PromptChip(
-                        label = "⚡ 运行启动脚本",
-                        isHighlight = true,
-                        onClick = onRunStartupScript
-                    )
-                }
-                PromptChip(label = "agent --status", onClick = { onQuickPrompt("agent --status") })
-                PromptChip(label = "ls -la", onClick = { onQuickPrompt("ls -la") })
-                PromptChip(label = "git status", onClick = { onQuickPrompt("git status") })
-                PromptChip(label = "python3 agent.py", onClick = { onQuickPrompt("python3 agent.py") })
-                PromptChip(label = "htop", onClick = { onQuickPrompt("htop") })
-            }
-
-            // Common CLI symbols row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                listOf("|", "&&", "sudo", "grep", "tail -f", "~/", ">", "2>&1", "cat").forEach { sym ->
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
-                            .clickable { onInsertSymbol(" $sym ") }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(
+                        onClick = onCollapse,
+                        modifier = Modifier.size(36.dp)
                     ) {
-                        Text(
-                            text = sym,
-                            style = TextStyle(
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                        Icon(
+                            imageVector = Icons.Rounded.KeyboardArrowDown,
+                            contentDescription = "收起输入框",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(28.dp)
                         )
                     }
+
+                    Text(
+                        text = "${text.length} 字符 · ${text.lines().size} 行",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (text.isNotEmpty()) {
+                    Text(
+                        text = "清空",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = AccentRed,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onTextChanged("") }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Multi-line Monospace Editor filling the expanded surface
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+            ) {
+                if (text.isEmpty()) {
+                    Text(
+                        text = "在此编写多行 Agent 命令、Shell 脚本或输入交互内容...\n支持长文本编辑和快速发送到终端",
+                        style = TextStyle(
+                            fontFamily = fontFamily,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    )
+                }
+                BasicTextField(
+                    value = text,
+                    onValueChange = onTextChanged,
+                    modifier = Modifier.fillMaxSize(),
+                    textStyle = TextStyle(
+                        fontFamily = fontFamily,
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface)
+                )
+            }
+
+            // Bottom bar inside expanded sheet: Circular send button on bottom-right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (text.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                        .clickable(enabled = text.isNotBlank(), onClick = onSend),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.Send,
+                        contentDescription = "Send",
+                        tint = if (text.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }
@@ -861,159 +918,141 @@ fun MoreActionsPanel(
 }
 
 /**
- * Fullscreen Input Dialog
- * Triggered by clicking the expand button in the input pill
- * Edge-to-edge minimalist, flat, zero shadow
+ * Google Messages Style Tools Drawer (Image #2 / #3)
+ * 3-Column Grid of circular action cards
  */
 @Composable
-fun FullscreenInputDialog(
-    text: String,
-    onTextChanged: (String) -> Unit,
-    fontFamily: FontFamily,
-    onSendRaw: (ByteArray) -> Unit,
-    onSend: () -> Unit,
-    onDismiss: () -> Unit
+fun GoogleMessagesToolsDrawer(
+    hasStartupScript: Boolean,
+    onRunStartupScript: () -> Unit,
+    onInsertCommand: (String) -> Unit,
+    onInsertSymbol: (String) -> Unit,
+    onClearTerminal: () -> Unit
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shadowElevation = 0.dp
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .imePadding(),
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 0.dp
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
+            // Row 1
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround
             ) {
-                // Header Bar
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                imageVector = Icons.Rounded.CloseFullscreen,
-                                contentDescription = "Exit Fullscreen",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = "全屏指令编辑",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "${text.length} 字符 · ${text.lines().size} 行",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                ToolGridItem(
+                    icon = Icons.Rounded.Code,
+                    label = "启动脚本",
+                    highlight = hasStartupScript,
+                    onClick = onRunStartupScript
+                )
+                ToolGridItem(
+                    icon = Icons.Rounded.SmartToy,
+                    label = "Agent 状态",
+                    onClick = { onInsertCommand("agent --status") }
+                )
+                ToolGridItem(
+                    icon = Icons.Rounded.Code,
+                    label = "Git 状态",
+                    onClick = { onInsertCommand("git status") }
+                )
+            }
 
-                    if (text.isNotEmpty()) {
-                        Text(
-                            text = "清空",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
-                            color = AccentRed,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable { onTextChanged("") }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
+            // Row 2
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                ToolGridItem(
+                    icon = Icons.Rounded.Terminal,
+                    label = "文件列表",
+                    onClick = { onInsertCommand("ls -la") }
+                )
+                ToolGridItem(
+                    icon = Icons.Rounded.Memory,
+                    label = "进程监控",
+                    onClick = { onInsertCommand("top") }
+                )
+                ToolGridItem(
+                    icon = Icons.Rounded.Terminal,
+                    label = "Python",
+                    onClick = { onInsertCommand("python3 agent.py") }
+                )
+            }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Large Multi-line Editor Area (Zero shadow, flat, clean outline)
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-                        .padding(16.dp)
-                ) {
-                    if (text.isEmpty()) {
-                        Text(
-                            text = "在此编写多行 Agent 命令、Shell 脚本或输入交互内容...\n支持长文本编辑和快速发送到终端",
-                            style = TextStyle(
-                                fontFamily = fontFamily,
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
-                    }
-                    BasicTextField(
-                        value = text,
-                        onValueChange = onTextChanged,
-                        modifier = Modifier.fillMaxSize(),
-                        textStyle = TextStyle(
-                            fontFamily = fontFamily,
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Quick Keys strip inside fullscreen
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    QuickKeyChip(label = "回车 ↵", isHighlight = true) { onSendRaw(byteArrayOf(13)) }
-                    QuickKeyChip(label = "TAB ⇥") { onSendRaw(byteArrayOf(9)) }
-                    QuickKeyChip(label = "Ctrl+C", isDanger = true) { onSendRaw(byteArrayOf(3)) }
-                    QuickKeyChip(label = "CLEAR") { onTextChanged("") }
-                    QuickKeyChip(label = "|") { onTextChanged("$text | ") }
-                    QuickKeyChip(label = "~/") { onTextChanged("$text~/") }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Large Send & Close Button
-                Button(
-                    onClick = onSend,
-                    enabled = text.isNotBlank(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("发送指令并退出全屏", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                }
+            // Row 3
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                ToolGridItem(
+                    icon = Icons.Rounded.Code,
+                    label = "管道符 |",
+                    onClick = { onInsertSymbol(" | ") }
+                )
+                ToolGridItem(
+                    icon = Icons.Rounded.Folder,
+                    label = "主目录 ~/",
+                    onClick = { onInsertSymbol("~/") }
+                )
+                ToolGridItem(
+                    icon = Icons.Rounded.DeleteSweep,
+                    label = "清空终端",
+                    onClick = onClearTerminal
+                )
             }
         }
+    }
+}
+
+@Composable
+fun ToolGridItem(
+    icon: ImageVector,
+    label: String,
+    highlight: Boolean = false,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(
+                    if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                )
+                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (highlight) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -1078,37 +1117,6 @@ fun QuickKeyChip(
                     isDanger -> AccentRed
                     else -> MaterialTheme.colorScheme.onSurface
                 }
-            )
-        )
-    }
-}
-
-@Composable
-fun PromptChip(
-    label: String,
-    isHighlight: Boolean = false,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (isHighlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-            .border(
-                1.dp,
-                if (isHighlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                RoundedCornerShape(8.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            style = TextStyle(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (isHighlight) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
             )
         )
     }
