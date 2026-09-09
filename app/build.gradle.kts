@@ -73,5 +73,6 @@ dependencies {
     implementation(libs.jsch)
     implementation("br.com.devsrsouza.compose.icons:tabler-icons:1.1.1")
     implementation("dev.chrisbanes.haze:haze:1.0.2")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:0.33.0")
     testImplementation("junit:junit:4.13.2")
 }
