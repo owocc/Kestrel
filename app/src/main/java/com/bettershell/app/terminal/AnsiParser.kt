@@ -112,6 +112,8 @@ object AnsiParser {
     private val DCS_REGEX = Regex("\u001BP[^\u001B]*\u001B\\\\")
     private val CONTROL_SEQ_REGEX = Regex("\u001B\\[\\?[0-9;]*[a-zA-Z]")
     private val CURSOR_SEQ_REGEX = Regex("\u001B\\[[0-9;]*[HJKGsu]")
+    private val CHARSET_SEQ_REGEX = Regex("\u001B[()][A-Za-z0-9]")
+    private val ESC_2CHAR_REGEX = Regex("\u001B[=>78MEc]")
 
     private fun sanitize(input: String): String {
         return input.replace("\r\n", "\n")
@@ -119,6 +121,8 @@ object AnsiParser {
             .replace(OSC_REGEX, "")
             .replace(DCS_REGEX, "")
             .replace(CONTROL_SEQ_REGEX, "")
+            .replace(CHARSET_SEQ_REGEX, "")
+            .replace(ESC_2CHAR_REGEX, "")
             .replace(CURSOR_SEQ_REGEX, "")
     }
 }

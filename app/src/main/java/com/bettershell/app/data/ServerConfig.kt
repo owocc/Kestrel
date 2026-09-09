@@ -27,5 +27,5 @@ data class ServerConfig(
     val lastConnected: Long = 0L,
     val defaultAgentId: String? = null,
     val presetDirectories: List<String> = emptyList(),
-    val persistentTerminalSession: Boolean = true
+    val persistentTerminalSession: Boolean = false
 )

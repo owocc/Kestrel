@@ -192,7 +192,7 @@ class TerminalSession(
                 if (server.persistentTerminalSession && !tmuxSessionName.isNullOrBlank()) {
                     delay(200)
                     val safeTmuxName = tmuxSessionName.replace(" ", "_").replace("\"", "")
-                    sendCommand("if command -v tmux >/dev/null 2>&1; then tmux new-session -A -s \"$safeTmuxName\"; fi")
+                    sendCommand("if command -v tmux >/dev/null 2>&1; then tmux -u new-session -A -s \"$safeTmuxName\"; fi")
                 }
 
                 // Execute startup script if provided

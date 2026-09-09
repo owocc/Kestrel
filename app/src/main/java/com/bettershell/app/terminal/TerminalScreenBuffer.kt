@@ -213,20 +213,77 @@ class TerminalScreenBuffer(
     private var currentFg = TerminalColors.DEFAULT_TEXT_COLOR
     private var currentBg = Color.Transparent
     private var currentBold = false
+    private var isDecGraphics = false
+    private var savedRow = 0
+    private var savedCol = 0
+    private var pendingEscape = ""
 
     init {
         rows.add(TerminalRow())
     }
 
     @Synchronized
-    fun processBytes(data: String) {
+    fun processBytes(rawChunk: String) {
+        val data = if (pendingEscape.isNotEmpty()) {
+            val combined = pendingEscape + rawChunk
+            pendingEscape = ""
+            combined
+        } else {
+            rawChunk
+        }
+
         var i = 0
         val len = data.length
 
         while (i < len) {
             val c = data[i]
 
-            // 1. OSC sequence (\u001B]...)
+            // 检查分片截断的未闭合转义序列
+            if (c == '\u001B') {
+                if (i + 1 >= len) {
+                    pendingEscape = data.substring(i)
+                    break
+                }
+                if (data[i + 1] == '[') {
+                    var j = i + 2
+                    while (j < len && (data[j] in '0'..'9' || data[j] == ';' || data[j] == ':' || data[j] == '?' || data[j] == ' ')) {
+                        j++
+                    }
+                    if (j >= len) {
+                        pendingEscape = data.substring(i)
+                        break
+                    }
+                }
+                if (data[i + 1] in "()*+") {
+                    if (i + 2 >= len) {
+                        pendingEscape = data.substring(i)
+                        break
+                    }
+                }
+            }
+
+            // 0. VT100 字符集模式切换 (\u001B(..., \u001B)..., \u001B*..., \u001B+...)
+            if (c == '\u001B' && i + 1 < len && (data[i + 1] == '(' || data[i + 1] == ')' || data[i + 1] == '*' || data[i + 1] == '+')) {
+                if (i + 2 < len) {
+                    val charset = data[i + 2]
+                    isDecGraphics = (charset == '0')
+                    i += 3
+                    continue
+                }
+            }
+
+            // 0.1 常见双字符终端控制序列: \u001B=, \u001B>, \u001B7, \u001B8, \u001BM, \u001BE, \u001Bc
+            if (c == '\u001B' && i + 1 < len && data[i + 1] in "=>78MEc") {
+                val escChar = data[i + 1]
+                when (escChar) {
+                    '7' -> { savedRow = cursorRow; savedCol = cursorCol }
+                    '8' -> { cursorRow = savedRow; cursorCol = savedCol; ensureRowExists(cursorRow) }
+                    'M' -> { if (cursorRow > 0) cursorRow-- }
+                    'c' -> { rows.clear(); rows.add(TerminalRow()); cursorRow = 0; cursorCol = 0 }
+                }
+                i += 2
+                continue
+            }
             if (c == '\u001B' && i + 1 < len && data[i + 1] == ']') {
                 val endBel = data.indexOf('\u0007', i + 2)
                 val endEsc = data.indexOf("\u001B\\", i + 2)
@@ -300,7 +357,34 @@ class TerminalScreenBuffer(
 
                     val nextControl = data.indexOfAny(charArrayOf('\u001B', '\r', '\n', '\b', '\t', '\u0007'), i)
                     val end = if (nextControl != -1) nextControl else len
-                    val textSegment = data.substring(i, end)
+                    val rawSegment = data.substring(i, end)
+                    val textSegment = if (isDecGraphics) {
+                        val sb = StringBuilder(rawSegment.length)
+                        for (ch in rawSegment) {
+                            sb.append(
+                                when (ch) {
+                                    'q' -> '─'
+                                    'x' -> '│'
+                                    'l' -> '┌'
+                                    'k' -> '┐'
+                                    'm' -> '└'
+                                    'j' -> '┘'
+                                    't' -> '├'
+                                    'u' -> '┤'
+                                    'v' -> '┴'
+                                    'w' -> '┬'
+                                    'n' -> '┼'
+                                    'a' -> '▒'
+                                    '`' -> '◆'
+                                    '~' -> '•'
+                                    else -> ch
+                                }
+                            )
+                        }
+                        sb.toString()
+                    } else {
+                        rawSegment
+                    }
 
                     cursorCol = row.writeString(cursorCol, textSegment, currentFg, currentBg, currentBold)
                     i = end

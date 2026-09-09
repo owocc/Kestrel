@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import com.bettershell.app.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,8 +19,18 @@ enum class TerminalFont(val displayName: String) {
     @Composable
     fun toComposeFontFamily(): FontFamily {
         return when (this) {
-            JETBRAINS_MONO_NERD -> FontFamily(Font(R.font.jetbrains_mono_nerd))
-            FIRA_CODE_NERD -> FontFamily(Font(R.font.fira_code_nerd))
+            JETBRAINS_MONO_NERD -> FontFamily(
+                Font(R.font.jetbrains_mono_nerd, FontWeight.Normal),
+                Font(R.font.jetbrains_mono_nerd, FontWeight.Bold),
+                Font(R.font.jetbrains_mono_nerd, FontWeight.Medium),
+                Font(R.font.jetbrains_mono_nerd, FontWeight.SemiBold)
+            )
+            FIRA_CODE_NERD -> FontFamily(
+                Font(R.font.fira_code_nerd, FontWeight.Normal),
+                Font(R.font.fira_code_nerd, FontWeight.Bold),
+                Font(R.font.fira_code_nerd, FontWeight.Medium),
+                Font(R.font.fira_code_nerd, FontWeight.SemiBold)
+            )
             SYSTEM_MONOSPACE -> FontFamily.Monospace
         }
     }
