@@ -91,6 +91,8 @@ fun AgentChatView(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val halfScreenHeight = (configuration.screenHeightDp * 0.5f).dp
     val filteredMessages = remember(messages) {
         messages.filterNot { msg ->
             msg.sender == ChatSender.SYSTEM && (
@@ -139,8 +141,9 @@ fun AgentChatView(
                 }
             }
 
+            // 底部始终保留 1/2 屏幕高度边距，防止内容被输入框与软键盘遮挡
             item {
-                Spacer(modifier = Modifier.height(90.dp))
+                Spacer(modifier = Modifier.height(halfScreenHeight))
             }
         }
     }
