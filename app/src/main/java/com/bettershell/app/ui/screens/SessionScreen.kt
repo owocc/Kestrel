@@ -114,14 +114,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.HazeDefaults
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -228,6 +236,7 @@ fun SessionScreen(
     val chatRawOutput by chatTerminalSession.annotatedOutput.collectAsState()
     val chatConnectionState by chatTerminalSession.connectionState.collectAsState()
 
+    val workHazeState = remember { HazeState() }
     var currentMode by remember { mutableStateOf(SessionMode.WORK) }
     var inputText by remember { mutableStateOf("") }
     var isExpandedInput by remember { mutableStateOf(false) }
@@ -428,7 +437,9 @@ fun SessionScreen(
                     messages = chatMessages,
                     isAgentBusy = isAgentBusy,
                     currentStatus = currentAgentStatus,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .haze(workHazeState)
                 )
             } else {
                 Box(
@@ -556,12 +567,73 @@ fun SessionScreen(
         ) {
             if (currentMode == SessionMode.WORK) {
                 // Chat 专属独立输入体系 (融合胶囊风格，对齐用户提供的 ChatGPT 截图)
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .imePadding()
-                        .padding(bottom = bottomNavPadding + 8.dp)
+                        .align(Alignment.BottomCenter)
                 ) {
+                    val baseColor = if (isDark) Color.Black else Color.White
+                    val bottomFinalColor = baseColor.copy(alpha = 0.80f)
+                    val solidStartDp = 44.dp
+
+                    // 1. 真实毛玻璃背景模糊层 (Backdrop Blur，在输入框上半截提供通透雾化效果)
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .hazeChild(
+                                state = workHazeState,
+                                style = HazeDefaults.style(
+                                    backgroundColor = baseColor.copy(alpha = if (isDark) 0.50f else 0.65f),
+                                    blurRadius = 24.dp,
+                                    noiseFactor = 0f
+                                )
+                            ) {
+                                mask = Brush.verticalGradient(
+                                    0.0f to Color.Transparent,
+                                    0.4f to Color.Black.copy(alpha = 0.4f),
+                                    1.0f to Color.Black,
+                                    startY = 0f,
+                                    endY = with(density) { solidStartDp.toPx() }
+                                )
+                            }
+                    )
+
+                    // 2. 渐变 + 80%实色遮挡层：上半截平滑过渡，从中间部分(44dp)开始变为80%实色遮挡，兼顾通透磨砂与遮挡
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .drawBehind {
+                                val solidStartPx = solidStartDp.toPx()
+                                // 上半部分平滑渐变至 80% 最终色彩
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        0.0f to Color.Transparent,
+                                        0.35f to baseColor.copy(alpha = 0.20f),
+                                        0.70f to baseColor.copy(alpha = 0.55f),
+                                        1.0f to bottomFinalColor,
+                                        startY = 0f,
+                                        endY = solidStartPx
+                                    ),
+                                    topLeft = Offset.Zero,
+                                    size = Size(size.width, solidStartPx)
+                                )
+                                // 从中间部分向下全域 80% 实色遮盖 (浅色为 80% 纯白，深色为 80% 纯黑)
+                                if (size.height > solidStartPx) {
+                                    drawRect(
+                                        color = bottomFinalColor,
+                                        topLeft = Offset(0f, solidStartPx),
+                                        size = Size(size.width, size.height - solidStartPx)
+                                    )
+                                }
+                            }
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .imePadding()
+                            .padding(bottom = bottomNavPadding + 8.dp)
+                    ) {
                     ChatIntegratedInputBar(
                         text = chatInputText,
                         onTextChanged = { chatInputText = it },
@@ -609,6 +681,7 @@ fun SessionScreen(
                             }
                         }
                     )
+                }
                 }
             } else {
                 // Shell 终端专属独立输入体系 (快捷键栏 + 药丸命令输入框 + 多行扩展支持)

@@ -72,5 +72,6 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.jsch)
     implementation("br.com.devsrsouza.compose.icons:tabler-icons:1.1.1")
+    implementation("dev.chrisbanes.haze:haze:1.0.2")
     testImplementation("junit:junit:4.13.2")
 }

@@ -410,7 +410,7 @@ fun ChatIntegratedInputBar(
                 Icon(
                     LucideIcons.Folder,
                     contentDescription = null,
-                    tint = AccentCyan,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f),
                     modifier = Modifier.size(13.dp)
                 )
                 Text(
