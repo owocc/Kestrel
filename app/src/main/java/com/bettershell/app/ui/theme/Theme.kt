@@ -47,9 +47,9 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFFFFFFFF), // 与 ModeTogglePill 浅色模式选中滑块完全一致的纯白
-    onPrimary = Color(0xFF111827),
-    primaryContainer = Color(0xFFFFFFFF), // 聊天用户消息气泡、表单选中背景统一
+    primary = Color(0xFF0284C7), // 优雅深天蓝青 (Sky 600)，彻底解决原先使用纯白导致手柄和选中高光隐形的问题
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFF3F4F6),
     onPrimaryContainer = Color(0xFF111827),
     secondary = LightSecondary,
     background = TerminalLight,
@@ -106,27 +106,27 @@ fun BetterShellTheme(
     }
 
     // 全局划词选中文本高亮与控制手柄色彩：
-    // 深色模式下：白色半透明高亮选区 (#FFFFFF，alpha 0.35f)，手柄优雅中灰 (#9CA3AF)
-    // 浅色模式下：黑色半透明高亮选区 (#000000，alpha 0.20f)，手柄沉稳中灰 (#6B7280)
+    // 浅色模式：深天蓝青水滴手柄 (#0284C7)，柔和天蓝青半透明高光 (#38BDF8，alpha 0.28f)，在纯白底色上黑字极其清晰
+    // 深色模式：高亮科技青手柄 (AccentCyan #06B6D4)，半透明青蓝选区高光 (alpha 0.35f)，在纯黑底色上白字极其清晰
     val customSelectionColors = if (isDark) {
         TextSelectionColors(
-            handleColor = Color(0xFF9CA3AF), // 浅灰中调，低调不刺眼
-            backgroundColor = Color(0xFFFFFFFF).copy(alpha = 0.35f)
+            handleColor = AccentCyan,
+            backgroundColor = AccentCyan.copy(alpha = 0.35f)
         )
     } else {
         TextSelectionColors(
-            handleColor = Color(0xFF6B7280), // 沉稳中灰，克制雅致
-            backgroundColor = Color(0xFF000000).copy(alpha = 0.20f)
+            handleColor = Color(0xFF0284C7),
+            backgroundColor = Color(0xFF38BDF8).copy(alpha = 0.28f)
         )
     }
 
-    CompositionLocalProvider(
-        LocalAppIsDark provides isDark,
-        LocalTextSelectionColors provides customSelectionColors
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = AppTypography
     ) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            typography = AppTypography,
+        CompositionLocalProvider(
+            LocalAppIsDark provides isDark,
+            LocalTextSelectionColors provides customSelectionColors,
             content = content
         )
     }

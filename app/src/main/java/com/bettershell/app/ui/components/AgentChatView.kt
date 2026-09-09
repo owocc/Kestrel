@@ -293,6 +293,10 @@ fun MulticaMessageItem(message: ChatMessage) {
 
             var showContextDetails by remember { mutableStateOf(false) }
 
+            val userBubbleBg = if (isDark) Color(0xFF27272A) else Color(0xFFF4F4F5)
+            val userBubbleBorder = if (isDark) Color(0xFF3F3F46) else Color(0xFFE4E4E7)
+            val userTextColor = if (isDark) Color(0xFFF4F4F5) else Color(0xFF18181B)
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
@@ -304,11 +308,8 @@ fun MulticaMessageItem(message: ChatMessage) {
                         bottomStart = 20.dp,
                         bottomEnd = 4.dp
                     ),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    border = BorderStroke(
-                        1.dp,
-                        if (isDark) Color(0xFF505050) else Color(0xFFE0E0E0)
-                    ),
+                    color = userBubbleBg,
+                    border = BorderStroke(1.dp, userBubbleBorder),
                     modifier = Modifier.widthIn(max = 310.dp)
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
@@ -350,7 +351,7 @@ fun MulticaMessageItem(message: ChatMessage) {
                             Text(
                                 text = displayPrompt,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = userTextColor
                             )
                         }
 
@@ -372,13 +373,13 @@ fun MulticaMessageItem(message: ChatMessage) {
                                     Icon(
                                         if (showContextDetails) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                        tint = userTextColor.copy(alpha = 0.6f),
                                         modifier = Modifier.size(12.dp)
                                     )
                                     Text(
                                         text = if (showContextDetails) "收起附带的对话上下文" else "已折叠附带的对话上下文",
                                         style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Medium),
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                        color = userTextColor.copy(alpha = 0.6f)
                                     )
                                 }
                             }
@@ -388,7 +389,7 @@ fun MulticaMessageItem(message: ChatMessage) {
                                 Text(
                                     text = contextSnippet,
                                     style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 14.sp),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.65f),
+                                    color = userTextColor.copy(alpha = 0.65f),
                                     modifier = Modifier.padding(top = 2.dp)
                                 )
                             }
