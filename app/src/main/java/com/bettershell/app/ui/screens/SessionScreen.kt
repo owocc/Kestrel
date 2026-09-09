@@ -48,6 +48,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -363,85 +365,30 @@ fun SessionScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .statusBarsPadding()
+                .background(if (isDark) Color.Black else Color.White)
         ) {
-        // Layer 1: Shell & Terminal Layer (Underneath)
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Top Navigation & Status Bar with Session Switching & Theme Toggle
-            SessionTopBar(
-                server = currentServer,
-                activeTerminalSession = activeSessionItem,
-                activeWorkSession = activeWorkSessionItem,
-                connectionState = if (currentMode == SessionMode.WORK) chatConnectionState else shellConnectionState,
-                currentMode = currentMode,
-                onModeSelected = { currentMode = it },
-                softWrap = terminalPrefs.softWrap,
-                isDark = isDark,
-                onToggleSoftWrap = { prefsRepository.toggleSoftWrap() },
-                onToggleTheme = {
-                    val nextMode = if (isDark) AppThemeMode.LIGHT else AppThemeMode.DARK
-                    prefsRepository.updateThemeMode(nextMode)
-                },
-                onBack = {
-                    focusManager.clearFocus()
-                    keyboardController?.hide()
-                    onBack()
-                },
-                onOpenTerminalSessions = { showTerminalSessionSwitcherSheet = true },
-                onOpenWorkSessions = { showWorkSessionSwitcherSheet = true },
-                onCreateTerminalSession = {
-                    sessionManager.createSession(currentServer)
-                },
-                onCreateWorkSession = {
-                    sessionManager.createWorkSession(
-                        server = currentServer,
-                        cwd = currentServer.presetDirectories.firstOrNull() ?: "~",
-                        agentId = currentServer.defaultAgentId ?: activeAgent?.id,
-                        model = activeAgent?.selectedModel ?: "default",
-                        thinkingLevel = activeAgent?.thinkingLevel ?: ThinkingLevel.AUTO
-                    )
-                },
-                onOpenDirectoryPicker = { showDirectoryPickerSheet = true },
-                onOpenImportCliSession = { showImportCliSessionSheet = true },
-                onResetWorkContext = {
-                    agentRunner.clearMessages()
-                    val dbHelper = LocalAgentDatabaseHelper(context)
-                    dbHelper.clearWorkMessages(activeWorkSessionItem.id)
-                },
-                onOpenSelectAgent = { showSelectAgentSheet = true },
-                onOpenSelectModel = { showSelectModelSheet = true },
-                onViewLogs = {
-                    onOpenLogsScreen(agentRawLogs, agentEventLogs)
-                },
-                onReconnect = {
-                    if (currentMode == SessionMode.WORK) chatTerminalSession.connect()
-                    else shellTerminalSession.connect()
-                },
-                onClear = {
-                    if (currentMode == SessionMode.WORK) {
-                        agentRunner.clearMessages()
-                        val dbHelper = LocalAgentDatabaseHelper(context)
-                        dbHelper.clearWorkMessages(activeWorkSessionItem.id)
-                    } else {
-                        shellTerminalSession.clearScreen()
-                    }
-                },
-                onOpenSettings = { onOpenServerSettings() }
-            )
-            // Content Area: Switch between Agent Chat View and Interactive Terminal View
-            if (currentMode == SessionMode.WORK) {
-                AgentChatView(
-                    messages = chatMessages,
-                    isAgentBusy = isAgentBusy,
-                    currentStatus = currentAgentStatus,
-                    modifier = Modifier
-                        .weight(1f)
-                        .haze(workHazeState)
+        // Layer 1: Content Area (Full screen in Work mode, allowing content to reach status bar)
+        if (currentMode == SessionMode.WORK) {
+            val statusBarTopDp = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+            AgentChatView(
+                messages = chatMessages,
+                isAgentBusy = isAgentBusy,
+                currentStatus = currentAgentStatus,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .haze(workHazeState),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = statusBarTopDp + 66.dp,
+                    bottom = 10.dp
                 )
-            } else {
+            )
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Spacer(modifier = Modifier.height(56.dp))
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -556,7 +503,76 @@ fun SessionScreen(
                     }
                 }
             }
-            }
+        }
+        }
+
+        // Top Floating Navigation Header (Overlaid at top of content area, reversed gradient in Work mode)
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+        ) {
+            SessionTopBar(
+                server = currentServer,
+                activeTerminalSession = activeSessionItem,
+                activeWorkSession = activeWorkSessionItem,
+                connectionState = if (currentMode == SessionMode.WORK) chatConnectionState else shellConnectionState,
+                currentMode = currentMode,
+                onModeSelected = { currentMode = it },
+                softWrap = terminalPrefs.softWrap,
+                isDark = isDark,
+                onToggleSoftWrap = { prefsRepository.toggleSoftWrap() },
+                onToggleTheme = {
+                    val nextMode = if (isDark) AppThemeMode.LIGHT else AppThemeMode.DARK
+                    prefsRepository.updateThemeMode(nextMode)
+                },
+                onBack = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                    onBack()
+                },
+                onOpenTerminalSessions = { showTerminalSessionSwitcherSheet = true },
+                onOpenWorkSessions = { showWorkSessionSwitcherSheet = true },
+                onCreateTerminalSession = {
+                    sessionManager.createSession(currentServer)
+                },
+                onCreateWorkSession = {
+                    sessionManager.createWorkSession(
+                        server = currentServer,
+                        cwd = currentServer.presetDirectories.firstOrNull() ?: "~",
+                        agentId = currentServer.defaultAgentId ?: activeAgent?.id,
+                        model = activeAgent?.selectedModel ?: "default",
+                        thinkingLevel = activeAgent?.thinkingLevel ?: ThinkingLevel.AUTO
+                    )
+                },
+                onOpenDirectoryPicker = { showDirectoryPickerSheet = true },
+                onOpenImportCliSession = { showImportCliSessionSheet = true },
+                onResetWorkContext = {
+                    agentRunner.clearMessages()
+                    val dbHelper = LocalAgentDatabaseHelper(context)
+                    dbHelper.clearWorkMessages(activeWorkSessionItem.id)
+                },
+                onOpenSelectAgent = { showSelectAgentSheet = true },
+                onOpenSelectModel = { showSelectModelSheet = true },
+                onViewLogs = {
+                    onOpenLogsScreen(agentRawLogs, agentEventLogs)
+                },
+                onReconnect = {
+                    if (currentMode == SessionMode.WORK) chatTerminalSession.connect()
+                    else shellTerminalSession.connect()
+                },
+                onClear = {
+                    if (currentMode == SessionMode.WORK) {
+                        agentRunner.clearMessages()
+                        val dbHelper = LocalAgentDatabaseHelper(context)
+                        dbHelper.clearWorkMessages(activeWorkSessionItem.id)
+                    } else {
+                        shellTerminalSession.clearScreen()
+                    }
+                },
+                onOpenSettings = { onOpenServerSettings() },
+                hazeState = workHazeState
+            )
         }
 
         // Layer 2: Floating Input System (Overlaid at bottom)
@@ -952,17 +968,96 @@ fun SessionTopBar(
     onViewLogs: () -> Unit,
     onReconnect: () -> Unit,
     onClear: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    hazeState: HazeState? = null
 ) {
     var showMoreMenu by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
+
+    val isWorkMode = currentMode == SessionMode.WORK
+    val baseColor = if (isDark) Color.Black else Color.White
+    val topFinalColor = baseColor.copy(alpha = 0.80f)
+
+    val statusBarHeightPx = WindowInsets.statusBars.getTop(density).toFloat()
+    val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
+    val headerHeight = if (isWorkMode) statusBarHeightDp + 76.dp else statusBarHeightDp + 56.dp
+    val solidEndDp = if (isWorkMode) statusBarHeightDp + 48.dp else statusBarHeightDp + 56.dp
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 8.dp)
+            .height(headerHeight)
     ) {
+        if (isWorkMode && hazeState != null) {
+            // 1. 顶部真实毛玻璃背景模糊层 (全屏沉浸：从状态栏顶端向下延伸并渐隐至完全透明)
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .hazeChild(
+                        state = hazeState,
+                        style = HazeDefaults.style(
+                            backgroundColor = baseColor.copy(alpha = if (isDark) 0.50f else 0.65f),
+                            blurRadius = 24.dp,
+                            noiseFactor = 0f
+                        )
+                    ) {
+                        mask = Brush.verticalGradient(
+                            0.0f to Color.Black,
+                            0.70f to Color.Black,
+                            1.0f to Color.Transparent,
+                            startY = 0f,
+                            endY = with(density) { headerHeight.toPx() }
+                        )
+                    }
+            )
+
+            // 2. 顶部反向渐变遮罩：顶部 80% 实色，向下平滑渐变到完全透明，和底部反着来！
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .drawBehind {
+                        val solidEndPx = solidEndDp.toPx()
+                        // 顶部按钮保护区：80% 纯白/纯黑
+                        drawRect(
+                            color = topFinalColor,
+                            topLeft = Offset.Zero,
+                            size = Size(size.width, solidEndPx)
+                        )
+                        // 向下平滑过渡到完全透明
+                        if (size.height > solidEndPx) {
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    0.0f to topFinalColor,
+                                    0.40f to baseColor.copy(alpha = 0.50f),
+                                    0.75f to baseColor.copy(alpha = 0.18f),
+                                    1.0f to Color.Transparent,
+                                    startY = solidEndPx,
+                                    endY = size.height
+                                ),
+                                topLeft = Offset(0f, solidEndPx),
+                                size = Size(size.width, size.height - solidEndPx)
+                            )
+                        }
+                    }
+            )
+        } else {
+            // Terminal 模式：常规平实背景
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(MaterialTheme.colorScheme.background)
+            )
+        }
+
+        // 按钮行内容 (避让状态栏，保持 56.dp 标准高度)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(statusBarHeightDp + 56.dp)
+                .align(Alignment.TopCenter)
+                .padding(top = statusBarHeightDp)
+                .padding(horizontal = 8.dp)
+        ) {
         // 1. 左侧：统一使用规范的 StandardBackButton
         Box(
             modifier = Modifier.align(Alignment.CenterStart).padding(start = 6.dp)
@@ -1126,6 +1221,7 @@ fun SessionTopBar(
                 width = 240.dp
             )
         }
+    }
     }
 }
 

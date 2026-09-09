@@ -88,7 +88,8 @@ fun AgentChatView(
     messages: List<ChatMessage>,
     isAgentBusy: Boolean,
     currentStatus: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
 ) {
     val listState = rememberLazyListState()
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -127,7 +128,7 @@ fun AgentChatView(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+            contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(filteredMessages, key = { it.id }) { message ->

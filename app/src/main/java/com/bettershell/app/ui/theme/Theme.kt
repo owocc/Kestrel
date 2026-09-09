@@ -1,6 +1,9 @@
 package com.bettershell.app.ui.theme
 
 import android.app.Activity
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -74,13 +77,31 @@ fun BetterShellTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
-            val bg = if (isDark) TerminalBlack else TerminalLight
-            window.statusBarColor = bg.toArgb()
-            window.navigationBarColor = bg.toArgb()
-            val controller = WindowCompat.getInsetsController(window, view)
-            controller.isAppearanceLightStatusBars = !isDark
-            controller.isAppearanceLightNavigationBars = !isDark
+            val activity = view.context as? ComponentActivity
+            if (activity != null) {
+                val statusBarStyle = if (isDark) {
+                    SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                } else {
+                    SystemBarStyle.light(
+                        android.graphics.Color.TRANSPARENT,
+                        android.graphics.Color.TRANSPARENT
+                    )
+                }
+                activity.enableEdgeToEdge(
+                    statusBarStyle = statusBarStyle,
+                    navigationBarStyle = statusBarStyle
+                )
+            }
+
+            val window = (view.context as? Activity)?.window
+            if (window != null) {
+                val solidColor = if (isDark) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+                window.statusBarColor = solidColor
+                window.navigationBarColor = solidColor
+                val controller = WindowCompat.getInsetsController(window, view)
+                controller.isAppearanceLightStatusBars = !isDark
+                controller.isAppearanceLightNavigationBars = !isDark
+            }
         }
     }
 
