@@ -13,8 +13,8 @@ android {
         applicationId = "owocc.kestrel"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "v1.0.0-alpha"
+        versionCode = 2
+        versionName = "v1.0.1-alpha"
 
         vectorDrawables {
             useSupportLibrary = true
