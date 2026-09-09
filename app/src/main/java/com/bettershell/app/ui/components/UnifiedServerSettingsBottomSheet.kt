@@ -183,7 +183,10 @@ fun UnifiedServerSettingsBottomSheet(
                                 password = password,
                                 privateKey = privateKey,
                                 passphrase = passphrase,
-                                startupScript = startupScript
+                                startupScript = startupScript,
+                                defaultAgentId = server.defaultAgentId,
+                                presetDirectories = server.presetDirectories,
+                                persistentTerminalSession = server.persistentTerminalSession
                             )
                             onSaveServer(updated)
                             onDismiss()

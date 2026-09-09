@@ -637,4 +637,89 @@ object LucideIcons {
             lineTo(9.5f, 20f)
         }
     }.build()
+
+    /**
+     * Lucide: folder
+     */
+    val Folder: ImageVector = ImageVector.Builder(
+        name = "LucideFolder",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(20f, 20f)
+            curveTo(20.552f, 20f, 21f, 19.552f, 21f, 19f)
+            lineTo(21f, 7f)
+            curveTo(21f, 6.448f, 20.552f, 6f, 20f, 6f)
+            lineTo(12f, 6f)
+            lineTo(10f, 4f)
+            lineTo(4f, 4f)
+            curveTo(3.448f, 4f, 3f, 4.448f, 3f, 5f)
+            lineTo(3f, 19f)
+            curveTo(3f, 19.552f, 3.448f, 20f, 4f, 20f)
+            close()
+        }
+    }.build()
+
+    /**
+     * Lucide: plus
+     */
+    val Plus: ImageVector = ImageVector.Builder(
+        name = "LucidePlus",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(5f, 12f)
+            lineTo(19f, 12f)
+            moveTo(12f, 5f)
+            lineTo(12f, 19f)
+        }
+    }.build()
+
+    /**
+     * Lucide: download
+     */
+    val Download: ImageVector = ImageVector.Builder(
+        name = "LucideDownload",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(
+            stroke = SolidColor(Color.Black),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(21f, 15f)
+            verticalLineTo(19f)
+            curveTo(21f, 19.53f, 20.789f, 20.04f, 20.414f, 20.414f)
+            curveTo(20.04f, 20.789f, 19.53f, 21f, 19f, 21f)
+            horizontalLineTo(5f)
+            curveTo(4.47f, 21f, 3.96f, 20.789f, 3.586f, 20.414f)
+            curveTo(3.21f, 20.04f, 3f, 19.53f, 3f, 19f)
+            verticalLineTo(15f)
+            moveTo(7f, 10f)
+            lineTo(12f, 15f)
+            lineTo(17f, 10f)
+            moveTo(12f, 15f)
+            verticalLineTo(3f)
+        }
+    }.build()
 }

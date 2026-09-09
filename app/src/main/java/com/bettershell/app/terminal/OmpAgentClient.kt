@@ -3,18 +3,21 @@ package com.bettershell.app.terminal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+@Serializable
 enum class ChatSender {
     USER,
     AGENT,
     SYSTEM
 }
 
+@Serializable
 enum class StepType {
     THINKING,
     TOOL_CALL,
@@ -22,6 +25,7 @@ enum class StepType {
     ERROR
 }
 
+@Serializable
 data class ExecutionStep(
     val id: String,
     val type: StepType,
@@ -32,15 +36,16 @@ data class ExecutionStep(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+@Serializable
 data class ChatMessage(
     val id: String,
     val sender: ChatSender,
     val content: String,
     val steps: List<ExecutionStep> = emptyList(),
     val isStreaming: Boolean = false,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val imageUris: List<String> = emptyList()
 )
-
 /**
  * Multica 风格的高级 Agent 执行协调器
  * 负责接收并解析 omp --mode json 输出的完整生命周期事件：

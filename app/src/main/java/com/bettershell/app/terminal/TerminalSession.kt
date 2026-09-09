@@ -37,7 +37,10 @@ data class TerminalEntry(
 
 class TerminalSession(
     val server: ServerConfig,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    val tmuxSessionName: String? = null,
+    val initialWorkingDirectory: String? = null,
+    val isAgentChannel: Boolean = false
 ) {
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -56,7 +59,10 @@ class TerminalSession(
     val annotatedOutput: StateFlow<AnnotatedString> = _annotatedOutput.asStateFlow()
 
     // 仅用于增量事件流（单行/增量 chunk 实时分发，不保留全量累积文本）
-    private val _rawChunkFlow = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 64)
+    private val _rawChunkFlow = kotlinx.coroutines.flow.MutableSharedFlow<String>(
+        extraBufferCapacity = 1024,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+    )
     val rawChunkFlow: kotlinx.coroutines.flow.SharedFlow<String> = _rawChunkFlow.asSharedFlow()
 
     private val _history = MutableStateFlow<List<String>>(emptyList())
@@ -99,6 +105,12 @@ class TerminalSession(
             appendOutput("\u001B[36m│\u001B[0m  Linux 6.8.0-agent-arm64 #1 SMP PREEMPT                     \u001B[36m│\u001B[0m\n")
             appendOutput("\u001B[36m│\u001B[0m  Optimized for Mobile Agent Control                         \u001B[36m│\u001B[0m\n")
             appendOutput("\u001B[36m╰────────────────────────────────────────────────────────────╯\u001B[0m\n\n")
+            if (!initialWorkingDirectory.isNullOrBlank() && initialWorkingDirectory != "~") {
+                appendOutput("\u001B[90m$ cd $initialWorkingDirectory\u001B[0m\n")
+            }
+            if (server.persistentTerminalSession && !tmuxSessionName.isNullOrBlank()) {
+                appendOutput("\u001B[33m[Session Persistence] Attached to tmux session: $tmuxSessionName\u001B[0m\n\n")
+            }
 
             // Execute startup script if configured
             if (server.startupScript.isNotBlank()) {
@@ -143,12 +155,17 @@ class TerminalSession(
                 jschSession = session
 
                 val ch = session.openChannel("shell") as ChannelShell
-                ch.setPtyType("xterm-256color", 120, 40, 960, 640)
-                try {
-                    ch.setEnv("TERM", "xterm-256color")
-                    ch.setEnv("COLORTERM", "truecolor")
-                } catch (e: Exception) {
-                    // Ignore if sshd restricts env
+                if (isAgentChannel) {
+                    ch.setPtyType("dumb", 10000, 1000, 0, 0)
+                    try {
+                        ch.setEnv("TERM", "dumb")
+                    } catch (_: Exception) {}
+                } else {
+                    ch.setPtyType("xterm-256color", 120, 40, 960, 640)
+                    try {
+                        ch.setEnv("TERM", "xterm-256color")
+                        ch.setEnv("COLORTERM", "truecolor")
+                    } catch (_: Exception) {}
                 }
                 val inStream = ch.inputStream
                 outputStream = ch.outputStream
@@ -160,6 +177,23 @@ class TerminalSession(
 
                 // Start reading SSH stream
                 startReader(inStream)
+                // Agent 专属通信管道：彻底关闭终端 echo 回显，避免命令与提示词文本被 PTY 反弹至输出流
+                if (isAgentChannel) {
+                    delay(100)
+                    sendCommand("stty -echo 2>/dev/null")
+                }
+                // Initial working directory if provided
+                if (!initialWorkingDirectory.isNullOrBlank() && initialWorkingDirectory != "~") {
+                    delay(200)
+                    sendCommand("cd \"$initialWorkingDirectory\"")
+                }
+
+                // Herdr / Tmux persistent background session support
+                if (server.persistentTerminalSession && !tmuxSessionName.isNullOrBlank()) {
+                    delay(200)
+                    val safeTmuxName = tmuxSessionName.replace(" ", "_").replace("\"", "")
+                    sendCommand("if command -v tmux >/dev/null 2>&1; then tmux new-session -A -s \"$safeTmuxName\"; fi")
+                }
 
                 // Execute startup script if provided
                 if (server.startupScript.isNotBlank()) {
@@ -219,7 +253,8 @@ class TerminalSession(
         scope.launch(Dispatchers.IO) {
             try {
                 outputStream?.let { stream ->
-                    stream.write("$command\r".toByteArray(StandardCharsets.UTF_8))
+                    val cleanCmd = command.trimEnd('\r', '\n')
+                    stream.write("$cleanCmd\r".toByteArray(StandardCharsets.UTF_8))
                     stream.flush()
                 }
             } catch (e: Exception) {

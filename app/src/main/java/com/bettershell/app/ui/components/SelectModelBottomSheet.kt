@@ -11,13 +11,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bettershell.app.agent.DiscoveredAgent
+import com.bettershell.app.agent.SupportedAgentsCatalog
 import com.bettershell.app.ui.theme.isAppInDarkTheme
 
 /**
@@ -45,10 +56,19 @@ fun SelectModelBottomSheet(
     val isDark = isAppInDarkTheme
     val topBorderColor = if (isDark) Color(0xFF383838) else Color(0xFFD1D5DB)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var searchQuery by remember { mutableStateOf("") }
+    val catalogModels: List<String> = SupportedAgentsCatalog.findMeta(agent.command).defaultModels
+    val combinedModels: List<String> = remember(agent.models, catalogModels) {
+        (listOf("default") + agent.models + catalogModels).distinct().filter { it.isNotBlank() }
+    }
 
-    val modelsList = if (agent.models.isNotEmpty()) agent.models else listOf("default")
-    val count = modelsList.size
-
+    val filteredModels: List<String> = remember(combinedModels, searchQuery) {
+        if (searchQuery.isBlank()) {
+            combinedModels
+        } else {
+            combinedModels.filter { it.contains(searchQuery.trim(), ignoreCase = true) }
+        }
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -89,8 +109,35 @@ fun SelectModelBottomSheet(
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
             )
-
-            Spacer(modifier = Modifier.height(14.dp))
+            // 搜索过滤与自定义输入栏
+            androidx.compose.material3.OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("搜索模型或输入自定义模型 ID...") },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                leadingIcon = {
+                    Icon(
+                        androidx.compose.material.icons.Icons.Rounded.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotBlank()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(
+                                androidx.compose.material.icons.Icons.Rounded.Close,
+                                contentDescription = "Clear",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            )
 
             Column(
                 modifier = Modifier
@@ -99,12 +146,16 @@ fun SelectModelBottomSheet(
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 24.dp)
             ) {
-                modelsList.forEachIndexed { index, modelName ->
+                val showCustomCard = searchQuery.isNotBlank() && !combinedModels.any { it.equals(searchQuery.trim(), ignoreCase = true) }
+                val listToRender = filteredModels
+                val count = listToRender.size + (if (showCustomCard) 1 else 0)
+
+                listToRender.forEachIndexed { index, modelName ->
                     val isSelected = modelName == selectedModel
                     val position = when {
                         count == 1 -> CardPosition.SINGLE
                         index == 0 -> CardPosition.TOP
-                        index == count - 1 -> CardPosition.BOTTOM
+                        index == count - 1 && !showCustomCard -> CardPosition.BOTTOM
                         else -> CardPosition.MIDDLE
                     }
 
@@ -112,10 +163,14 @@ fun SelectModelBottomSheet(
                     val subtitle = when {
                         modelName == "default" -> "遵循 CLI 本地环境配置的默认 LLM 模型"
                         modelName.contains("gemini", ignoreCase = true) -> "Google 高效多模态推理模型"
-                        modelName.contains("claude", ignoreCase = true) -> "Anthropic 卓越代码与逻辑推理模型"
-                        modelName.contains("gpt", ignoreCase = true) -> "OpenAI 旗舰通用大模型"
-                        modelName.contains("deepseek", ignoreCase = true) -> "DeepSeek 高效编码与深度推理模型"
-                        else -> "专用模型配置"
+                        modelName.contains("claude", ignoreCase = true) -> "Anthropic 卓越代码与深度逻辑推理模型"
+                        modelName.contains("gpt-5", ignoreCase = true) -> "OpenAI 次世代智能体核心模型"
+                        modelName.contains("gpt", ignoreCase = true) -> "OpenAI 旗舰通用推理大模型"
+                        modelName.contains("deepseek", ignoreCase = true) -> "DeepSeek 开源高效编码与推理模型"
+                        modelName.contains("kimi", ignoreCase = true) -> "Moonshot 长上下文长思考模型"
+                        modelName.contains("qwen", ignoreCase = true) -> "通义千问高效代码模型"
+                        modelName.contains("grok", ignoreCase = true) -> "xAI Grok 极速实时推理模型"
+                        else -> "专用模型: $modelName"
                     }
 
                     OpenAiRadioOptionCard(
@@ -126,6 +181,21 @@ fun SelectModelBottomSheet(
                         isDark = isDark,
                         onClick = {
                             onSelectModel(modelName)
+                            onDismiss()
+                        }
+                    )
+                }
+
+                if (showCustomCard) {
+                    val customModel = searchQuery.trim()
+                    OpenAiRadioOptionCard(
+                        title = "使用自定义模型: $customModel",
+                        subtitle = "直接传递至 CLI 的 --model 参数执行",
+                        selected = selectedModel == customModel,
+                        position = if (listToRender.isEmpty()) CardPosition.SINGLE else CardPosition.BOTTOM,
+                        isDark = isDark,
+                        onClick = {
+                            onSelectModel(customModel)
                             onDismiss()
                         }
                     )

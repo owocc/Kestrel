@@ -23,7 +23,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -71,4 +72,5 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.jsch)
     implementation("br.com.devsrsouza.compose.icons:tabler-icons:1.1.1")
+    testImplementation("junit:junit:4.13.2")
 }

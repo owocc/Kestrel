@@ -38,8 +38,8 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FindInPage
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
@@ -56,11 +56,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -89,10 +91,33 @@ fun AgentChatView(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val filteredMessages = remember(messages) {
+        messages.filterNot { msg ->
+            msg.sender == ChatSender.SYSTEM && (
+                msg.content.trim().isEmpty() ||
+                msg.content.trim() == ">" ||
+                msg.content.startsWith(">") ||
+                msg.content.startsWith("∙") ||
+                msg.content.startsWith("•") ||
+                msg.content.contains("[coco@") ||
+                msg.content.contains("@omarchy") ||
+                msg.content.contains("omp --mode") ||
+                msg.content.contains("claude -p") ||
+                msg.content.contains("codex exec") ||
+                msg.content.contains("[Context of prior discussion") ||
+                msg.content.contains("[Current user request]") ||
+                (msg.content.contains("@") && (msg.content.contains("~ $") || msg.content.contains("~ ✗") || msg.content.contains("]$"))) ||
+                msg.content.contains("CodeBuddy SDK") ||
+                msg.content.contains("AskCodebuddy") ||
+                msg.content.trim() == "'" ||
+                msg.content.trim() == "''"
+            )
+        }
+    }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.lastIndex)
+    LaunchedEffect(filteredMessages.size) {
+        if (filteredMessages.isNotEmpty()) {
+            listState.animateScrollToItem(filteredMessages.lastIndex)
         }
     }
 
@@ -103,7 +128,7 @@ fun AgentChatView(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(messages, key = { it.id }) { message ->
+            items(filteredMessages, key = { it.id }) { message ->
                 MulticaMessageItem(message = message)
             }
 
@@ -156,32 +181,114 @@ fun MulticaStatusPill(status: String) {
         )
     }
 }
+
+@Composable
+fun SystemMessageSection(message: ChatMessage) {
+    var isExpanded by remember { mutableStateOf(false) }
+    val isDark = com.bettershell.app.ui.theme.isAppInDarkTheme
+    val rawText = message.content.trim()
+    val isSingleShort = !rawText.contains('\n') && rawText.length <= 35
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalAlignment = Alignment.Start
+    ) {
+        if (isSingleShort) {
+            // 单行极简系统提示：居左轻量展现
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .padding(vertical = 3.dp, horizontal = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f))
+                )
+                Text(
+                    text = rawText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    fontWeight = FontWeight.Normal
+                )
+            }
+        } else {
+            // 多行或长系统消息：和思考步骤一样居左收纳折叠！
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { isExpanded = !isExpanded }
+                    .padding(vertical = 4.dp, horizontal = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = if (isExpanded) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(15.dp)
+                )
+                Text(
+                    text = if (isExpanded) "系统信息详情" else "系统信息 (${rawText.lines().firstOrNull()?.take(28) ?: "查看"}...)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isDark) Color(0xFF222222) else Color(0xFFF3F4F6),
+                    border = BorderStroke(1.dp, if (isDark) Color(0xFF333333) else Color(0xFFE5E7EB)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 4.dp)
+                ) {
+                    Text(
+                        text = rawText,
+                        style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 16.sp),
+                        color = if (isDark) Color(0xFFD1D5DB) else Color(0xFF374151),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
+    }
+}
 @Composable
 fun MulticaMessageItem(message: ChatMessage) {
     val isDark = com.bettershell.app.ui.theme.isAppInDarkTheme
     when (message.sender) {
         ChatSender.SYSTEM -> {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-                ) {
-                    Text(
-                        text = message.content,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
-                    )
-                }
-            }
+            SystemMessageSection(message = message)
         }
         ChatSender.USER -> {
+            val rawContent = message.content
+            val hasContextBlock = rawContent.contains("[Context of prior discussion in this session]:")
+            val displayPrompt = if (hasContextBlock) {
+                rawContent.substringAfter("[Current user request]:\n").trim().ifBlank {
+                    rawContent.substringAfter("[Current user request]:").trim()
+                }
+            } else {
+                rawContent
+            }
+
+            val contextSnippet = if (hasContextBlock) {
+                rawContent.substringBefore("[Current user request]").trim()
+            } else null
+
+            var showContextDetails by remember { mutableStateOf(false) }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
@@ -200,12 +307,89 @@ fun MulticaMessageItem(message: ChatMessage) {
                     ),
                     modifier = Modifier.widthIn(max = 310.dp)
                 ) {
-                    Text(
-                        text = message.content,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                    )
+                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        if (message.imageUris.isNotEmpty()) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.padding(bottom = if (displayPrompt.isNotBlank()) 6.dp else 0.dp)
+                            ) {
+                                message.imageUris.forEach { imgUri ->
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                LucideIcons.Image,
+                                                contentDescription = null,
+                                                tint = AccentCyan,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Text(
+                                                text = "图片附件",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 核心指令直接显示
+                        if (displayPrompt.isNotBlank()) {
+                            Text(
+                                text = displayPrompt,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+
+                        // 附带的历史上下文折叠起来，默认不直接展示
+                        if (contextSnippet != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.35f),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { showContextDetails = !showContextDetails }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        if (showContextDetails) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text(
+                                        text = if (showContextDetails) "收起附带的对话上下文" else "已折叠附带的对话上下文",
+                                        style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+
+                            if (showContextDetails) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = contextSnippet,
+                                    style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 14.sp),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.65f),
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -263,7 +447,7 @@ fun MulticaTimelineSection(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Icon(
-                imageVector = if (isExpanded) Icons.Rounded.KeyboardArrowDown else Icons.Rounded.KeyboardArrowRight,
+                imageVector = if (isExpanded) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp)

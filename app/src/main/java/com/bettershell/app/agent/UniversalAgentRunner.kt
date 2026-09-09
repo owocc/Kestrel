@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -24,18 +25,25 @@ interface IAgentRunner {
     fun setAgent(agent: DiscoveredAgent?)
     fun setModel(model: String)
     fun setThinkingLevel(level: ThinkingLevel)
-    fun sendPrompt(prompt: String)
+    fun sendPrompt(prompt: String, imageUris: List<String> = emptyList())
     fun onRemoteChunk(chunk: String)
     fun clearMessages()
+    fun loadHistory(initialMessages: List<ChatMessage>)
+    fun updateWorkingDirectory(newCwd: String)
 }
 
 /**
  * 通用多 Agent 协调执行器
  */
 class UniversalAgentRunner(
+    var sessionId: String = java.util.UUID.randomUUID().toString(),
+    var cwd: String = "~",
+    var cliResumeId: String? = null,
     initialAgent: DiscoveredAgent?,
-    private val sendRawCommand: (String) -> Unit
+    private val sendRawCommand: (String) -> Unit,
+    var onMessageSaved: ((ChatMessage) -> Unit)? = null
 ) : IAgentRunner {
+    private var remoteSessionId: String? = cliResumeId
 
     private val _currentAgent = MutableStateFlow(initialAgent)
     override val currentAgent: StateFlow<DiscoveredAgent?> = _currentAgent.asStateFlow()
@@ -64,12 +72,24 @@ class UniversalAgentRunner(
     private val _eventLogs = MutableStateFlow<List<AgentEventLogItem>>(emptyList())
     override val eventLogs: StateFlow<List<AgentEventLogItem>> = _eventLogs.asStateFlow()
 
+    private fun isTerminalNoiseOrEcho(line: String): Boolean {
+        val trimmed = line.trim()
+        if (trimmed.isEmpty()) return true
+        if (trimmed.startsWith("[?") || trimmed.startsWith("]") || trimmed.startsWith("^")) return true
+        if (trimmed.startsWith(">") || trimmed.startsWith("∙") || trimmed.startsWith("•")) return true
+        if (trimmed.contains("@") && (trimmed.endsWith("$") || trimmed.endsWith("#") || trimmed.endsWith("%") || trimmed.contains("~ ✗") || trimmed.contains("~ $") || trimmed.contains("~]"))) return true
+        if (trimmed.contains("omp --mode") || trimmed.contains("claude -p") || trimmed.contains("codex exec") || trimmed.contains("opencode run") || trimmed.startsWith("cd ")) return true
+        if (trimmed.startsWith("[Context of prior discussion") || trimmed.startsWith("[Current user request]") || trimmed.startsWith("Human:") || trimmed.startsWith("Assistant:")) return true
+        if (trimmed == "'" || trimmed == "''" || trimmed == "\\" || trimmed.endsWith("'")) return true
+        return false
+    }
+
     private val _rawLogs = MutableStateFlow("")
     override val rawLogs: StateFlow<String> = _rawLogs.asStateFlow()
 
     private val json = Json { ignoreUnknownKeys = true }
     private val lineBuffer = StringBuilder()
-
+    private val ansiRegex = Regex("\u001B\\[[0-9;?]*[a-zA-Z]|\u001B\\][^\u0007\u001B]*[\u0007\u001B\\\\]|\u001B[()][A-Z0-9]")
     override fun setAgent(agent: DiscoveredAgent?) {
         _currentAgent.value = agent
         if (agent != null) {
@@ -90,6 +110,7 @@ class UniversalAgentRunner(
     }
 
     override fun clearMessages() {
+        remoteSessionId = null
         _messages.value = listOf(
             ChatMessage(
                 id = "init_${System.currentTimeMillis()}",
@@ -99,7 +120,17 @@ class UniversalAgentRunner(
         )
     }
 
-    override fun sendPrompt(prompt: String) {
+    override fun loadHistory(initialMessages: List<ChatMessage>) {
+        if (initialMessages.isNotEmpty()) {
+            _messages.value = initialMessages
+        }
+    }
+
+    override fun updateWorkingDirectory(newCwd: String) {
+        cwd = newCwd
+    }
+
+    override fun sendPrompt(prompt: String, imageUris: List<String>) {
         val timeStr = now()
         val agent = _currentAgent.value
         if (agent == null) {
@@ -112,9 +143,20 @@ class UniversalAgentRunner(
         }
 
         val cmdBuilder = StringBuilder()
+
+        // 1. 切换至当前会话工作目录 (cwd)
+        if (cwd.isNotBlank() && cwd != "~") {
+            cmdBuilder.append("cd \"$cwd\" && ")
+        }
+
+        // 2. 拼接对应 CLI 命令与会话标识 (仅在用户显式导入 CLI 历史会话时传递 --resume)
+        val explicitResumeId = cliResumeId?.trim()?.takeIf { it.isNotBlank() }
         when (agent.type) {
             AgentType.OMP -> {
                 cmdBuilder.append("omp --mode json -p")
+                if (explicitResumeId != null) {
+                    cmdBuilder.append(" --resume \"$explicitResumeId\"")
+                }
                 if (agent.selectedModel.isNotBlank() && agent.selectedModel != "default") {
                     cmdBuilder.append(" --model \"${agent.selectedModel}\"")
                 }
@@ -124,31 +166,71 @@ class UniversalAgentRunner(
             }
             AgentType.CLAUDE -> {
                 cmdBuilder.append("claude -p")
+                if (explicitResumeId != null) {
+                    cmdBuilder.append(" --resume \"$explicitResumeId\"")
+                }
                 if (agent.selectedModel.isNotBlank() && agent.selectedModel != "default") {
                     cmdBuilder.append(" --model \"${agent.selectedModel}\"")
                 }
             }
             AgentType.CODEX -> {
                 cmdBuilder.append("codex exec")
+                if (explicitResumeId != null) {
+                    cmdBuilder.append(" --resume \"$explicitResumeId\"")
+                }
+            }
+            AgentType.OPENCODE -> {
+                cmdBuilder.append("opencode run")
+                if (explicitResumeId != null) {
+                    cmdBuilder.append(" --session \"$explicitResumeId\"")
+                }
             }
             else -> {
                 cmdBuilder.append("${agent.command} -p")
             }
         }
+        // 3. 构建历史对话上下文：提取最近多轮问答，彻底解决单次请求无法获知上句话的问题
+        val previousTurns = _messages.value.filter {
+            (it.sender == ChatSender.USER || it.sender == ChatSender.AGENT) &&
+            it.content.isNotBlank() &&
+            !it.isStreaming
+        }.takeLast(6)
 
-        val safePrompt = prompt.replace("'", "'\\''")
-        cmdBuilder.append(" '$safePrompt'\n")
+        val promptWithContext = if (previousTurns.isNotEmpty()) {
+            val contextBlock = previousTurns.joinToString("\n") { msg ->
+                val role = if (msg.sender == ChatSender.USER) "Human" else "Assistant"
+                "$role: ${msg.content.trim()}"
+            }
+            "[Context of prior discussion in this session]:\n$contextBlock\n\n[Current user request]:\n$prompt"
+        } else {
+            prompt
+        }
+
+        val fullPromptWithImages = if (imageUris.isNotEmpty()) {
+            val imageListStr = imageUris.joinToString(", ")
+            "$promptWithContext\n\n[Attached Images: $imageListStr]"
+        } else {
+            promptWithContext
+        }
+
+        // 使用标准 POSIX / Fish / Bash 通用单引号转义，保证跨 Shell 兼容性
+        val safePrompt = fullPromptWithImages.replace("'", "'\\''")
+        cmdBuilder.append(" '$safePrompt'")
         val fullCommand = cmdBuilder.toString()
 
         _rawLogs.value = (_rawLogs.value + "\n\n[$timeStr] >>> [USER_PROMPT] $prompt\n[$timeStr] >>> [COMMAND] $fullCommand").takeLast(60000)
         addEventLog(timeStr, "prompt", "用户下发任务 (${agent.type.displayName})", prompt, AgentEventLevel.INFO)
 
+        // 保证客户端展现的气泡只包含当前用户纯净提问，绝对不泄露前置的 [Context ...] 构造文本
         val userMsg = ChatMessage(
             id = "user_${System.currentTimeMillis()}",
             sender = ChatSender.USER,
-            content = prompt
+            content = prompt,
+            imageUris = imageUris
         )
         _messages.value = _messages.value + userMsg
+        onMessageSaved?.invoke(userMsg)
+
         _isBusy.value = true
         _currentStatus.value = "Thinking..."
 
@@ -173,21 +255,64 @@ class UniversalAgentRunner(
             val newlineIndex = lineBuffer.indexOf('\n')
             if (newlineIndex == -1) break
 
-            val completeLine = lineBuffer.substring(0, newlineIndex).trim()
+            val rawLine = lineBuffer.substring(0, newlineIndex)
             lineBuffer.delete(0, newlineIndex + 1)
 
-            if (completeLine.startsWith("{") && completeLine.endsWith("}")) {
-                processJsonLine(completeLine, timeStr)
+            val cleanLine = rawLine.replace(ansiRegex, "").trim()
+            if (cleanLine.isBlank()) continue
+
+            // 1. 优先提取行内的有效 JSON 数据块进行结构化解析
+            val firstBrace = cleanLine.indexOf('{')
+            val lastBrace = cleanLine.lastIndexOf('}')
+            var handledJson = false
+            if (firstBrace != -1 && lastBrace > firstBrace) {
+                val candidateJson = cleanLine.substring(firstBrace, lastBrace + 1)
+                handledJson = processJsonLine(candidateJson, timeStr)
+            }
+
+            // 2. 将无 JSON 包裹的内容区分为致命错误 vs 普通运行时日志
+            if (!handledJson && _isBusy.value) {
+                if (!isTerminalNoiseOrEcho(cleanLine)) {
+                    val isFatalError = cleanLine.startsWith("Error:", ignoreCase = true) ||
+                            cleanLine.contains("command not found", ignoreCase = true) ||
+                            cleanLine.contains("No such file or directory", ignoreCase = true) ||
+                            cleanLine.contains("exit=failure", ignoreCase = true)
+
+                    if (isFatalError) {
+                        addEventLog(timeStr, "error", cleanLine, level = AgentEventLevel.ERROR)
+                        val sysMsg = ChatMessage(
+                            id = "sys_${System.currentTimeMillis()}_${(0..999).random()}",
+                            sender = ChatSender.SYSTEM,
+                            content = cleanLine
+                        )
+                        _messages.value = _messages.value + sysMsg
+                        onMessageSaved?.invoke(sysMsg)
+
+                        _isBusy.value = false
+                        _currentStatus.value = null
+                        markCurrentAgentDone()
+                    } else {
+                        // SDK 警告、环境提示等属于后台运行时日志，记入执行日志，不干扰前台聊天主视图
+                        addEventLog(timeStr, "runtime_notice", cleanLine, level = AgentEventLevel.INFO)
+                    }
+                }
             }
         }
     }
 
-    private fun processJsonLine(line: String, timeStr: String) {
+    private fun processJsonLine(line: String, timeStr: String): Boolean {
         try {
             val obj = json.parseToJsonElement(line).jsonObject
-            val type = obj["type"]?.jsonPrimitive?.content ?: return
+            val type = obj["type"]?.jsonPrimitive?.content ?: return false
 
             when (type) {
+                "session" -> {
+                    val sid = obj["id"]?.jsonPrimitive?.content
+                    if (!sid.isNullOrBlank()) {
+                        remoteSessionId = sid
+                        addEventLog(timeStr, "session", "已绑定远端会话: $sid", level = AgentEventLevel.INFO)
+                    }
+                }
                 "agent_start" -> {
                     addEventLog(timeStr, "agent_start", "Agent 任务执行开始", level = AgentEventLevel.INFO)
                 }
@@ -224,6 +349,26 @@ class UniversalAgentRunner(
                         appendAgentText(delta)
                     }
                 }
+                "message_end" -> {
+                    val msgObj = obj["message"]?.jsonObject
+                    if (msgObj != null && msgObj["role"]?.jsonPrimitive?.content == "assistant") {
+                        val contentArr = msgObj["content"]?.jsonArray
+                        contentArr?.forEach { item ->
+                            val itemObj = item.jsonObject
+                            if (itemObj["type"]?.jsonPrimitive?.content == "text") {
+                                val fullText = itemObj["text"]?.jsonPrimitive?.content ?: ""
+                                if (fullText.isNotBlank()) {
+                                    setAgentTextIfEmpty(fullText)
+                                }
+                            }
+                        }
+                    }
+                }
+                "turn_end" -> {
+                    _isBusy.value = false
+                    _currentStatus.value = null
+                    markCurrentAgentDone()
+                }
                 "agent_end" -> {
                     _isBusy.value = false
                     _currentStatus.value = null
@@ -231,7 +376,9 @@ class UniversalAgentRunner(
                     addEventLog(timeStr, "agent_end", "Agent 任务执行完成", level = AgentEventLevel.INFO)
                 }
             }
+            return true
         } catch (_: Exception) {
+            return false
         }
     }
 
@@ -242,6 +389,18 @@ class UniversalAgentRunner(
             val cur = list[index]
             list[index] = cur.copy(content = cur.content + delta)
             _messages.value = list
+        }
+    }
+
+    private fun setAgentTextIfEmpty(text: String) {
+        val list = _messages.value.toMutableList()
+        val index = list.indexOfLast { it.sender == ChatSender.AGENT }
+        if (index != -1) {
+            val cur = list[index]
+            if (cur.content.isBlank()) {
+                list[index] = cur.copy(content = text)
+                _messages.value = list
+            }
         }
     }
 
@@ -279,7 +438,14 @@ class UniversalAgentRunner(
         val index = list.indexOfLast { it.sender == ChatSender.AGENT }
         if (index != -1) {
             val cur = list[index]
-            list[index] = cur.copy(isStreaming = false)
+            if (cur.content.isBlank() && cur.steps.isEmpty()) {
+                // 若该 Agent 占位气泡尚未产生任何实质回复或步骤，清理空的占位气泡
+                list.removeAt(index)
+            } else {
+                val doneMsg = cur.copy(isStreaming = false)
+                list[index] = doneMsg
+                onMessageSaved?.invoke(doneMsg)
+            }
             _messages.value = list
         }
     }

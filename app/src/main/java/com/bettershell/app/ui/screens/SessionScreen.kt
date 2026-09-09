@@ -146,9 +146,17 @@ import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.data.ServerRepository
 import com.bettershell.app.data.TerminalFont
 import com.bettershell.app.data.TerminalPreferencesRepository
+import com.bettershell.app.data.LocalAgentDatabaseHelper
 import com.bettershell.app.terminal.ConnectionState
 import com.bettershell.app.terminal.ServerSessionItem
+import com.bettershell.app.terminal.WorkSessionItem
 import com.bettershell.app.terminal.SessionManager
+import com.bettershell.app.agent.RemoteFileScanner
+import com.bettershell.app.agent.ThinkingLevel
+import com.bettershell.app.ui.components.DirectoryPickerBottomSheet
+import com.bettershell.app.ui.components.ImportCliSessionBottomSheet
+import com.bettershell.app.ui.components.WorkSessionSwitcherBottomSheet
+import com.bettershell.app.ui.components.TerminalSessionSwitcherBottomSheet
 import com.bettershell.app.ui.theme.AccentCyan
 import com.bettershell.app.ui.theme.AccentGreen
 import com.bettershell.app.ui.theme.AccentOrange
@@ -224,8 +232,10 @@ fun SessionScreen(
     var inputText by remember { mutableStateOf("") }
     var isExpandedInput by remember { mutableStateOf(false) }
     var showServerSettingsSheet by remember { mutableStateOf(false) }
-    var showSessionSwitcherSheet by remember { mutableStateOf(false) }
-    var sessionToRename by remember { mutableStateOf<ServerSessionItem?>(null) }
+    var showWorkSessionSwitcherSheet by remember { mutableStateOf(false) }
+    var showTerminalSessionSwitcherSheet by remember { mutableStateOf(false) }
+    var showDirectoryPickerSheet by remember { mutableStateOf(false) }
+    var showImportCliSessionSheet by remember { mutableStateOf(false) }
     var showFontSizeIndicator by remember { mutableStateOf(false) }
     var indicatorDismissJob by remember { mutableStateOf<Job?>(null) }
     var showSelectModelSheet by remember { mutableStateOf(false) }
@@ -236,18 +246,34 @@ fun SessionScreen(
         mutableStateOf(agentDiscoveryRepo.getCachedAgents(currentServer.id))
     }
     val selectedAgentId = remember(currentServer.id) {
-        agentDiscoveryRepo.getSelectedAgentId(currentServer.id)
+        currentServer.defaultAgentId ?: agentDiscoveryRepo.getSelectedAgentId(currentServer.id)
     }
     val initialAgent = remember(discoveredAgents, selectedAgentId) {
         discoveredAgents.find { it.id == selectedAgentId } ?: discoveredAgents.firstOrNull()
     }
 
-    val agentRunner = remember(currentServer.id) {
-        UniversalAgentRunner(
-            initialAgent = initialAgent,
+    // Work 多会话状态与当前活跃 Work 会话
+    val workSessionsMap by sessionManager.workSessionsMap.collectAsState()
+    val activeWorkSessionMap by sessionManager.activeWorkSessionMap.collectAsState()
+
+    val serverWorkSessions = remember(workSessionsMap, currentServer.id) {
+        sessionManager.getWorkSessionsForServer(currentServer.id)
+    }
+
+    val activeWorkSessionItem = remember(serverWorkSessions, activeWorkSessionMap, currentServer.id, initialAgent) {
+        sessionManager.getActiveWorkSession(currentServer.id)
+            ?: sessionManager.getOrCreateInitialWorkSession(currentServer, initialAgent)
+    }
+
+    // 根据当前选中的 WorkSession 获取专属 Runner 实例
+    val agentRunner = remember(activeWorkSessionItem.id, currentServer.id, chatTerminalSession) {
+        sessionManager.getOrCreateWorkRunner(
+            workSession = activeWorkSessionItem,
+            currentAgent = initialAgent,
             sendRawCommand = { cmd -> chatTerminalSession.sendCommand(cmd) }
         )
     }
+
     val activeAgent by agentRunner.currentAgent.collectAsState()
     val chatMessages by agentRunner.messages.collectAsState()
     val isAgentBusy by agentRunner.isBusy.collectAsState()
@@ -258,8 +284,27 @@ fun SessionScreen(
     var showThinkingLevelSheet by remember { mutableStateOf(false) }
     var chatInputText by remember { mutableStateOf("") }
 
+    // @ 文件提及检索候选文件列表
+    var availableFiles by remember(currentServer.id, activeWorkSessionItem.cwd) {
+        mutableStateOf<List<String>>(emptyList())
+    }
+
+    LaunchedEffect(currentServer.id, activeWorkSessionItem.cwd) {
+        availableFiles = RemoteFileScanner.listFiles(currentServer, activeWorkSessionItem.cwd)
+    }
+
+    // 图片上传与预览附件状态
+    var attachedImages by remember { mutableStateOf<List<String>>(emptyList()) }
+    val imagePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            attachedImages = (attachedImages + uris.map { it.toString() }).distinct()
+        }
+    }
+
     // 仅监听 Chat 管道解析 JSONL 执行流 (扫描已全量移交首页服务器管理)
-    LaunchedEffect(chatTerminalSession) {
+    LaunchedEffect(chatTerminalSession, agentRunner) {
         chatTerminalSession.rawChunkFlow.collect { chunk ->
             agentRunner.onRemoteChunk(chunk)
         }
@@ -273,8 +318,10 @@ fun SessionScreen(
     val isImeVisible = WindowInsets.isImeVisible
     val bottomNavPadding = if (isImeVisible) 0.dp else navBottomDp
     // Hierarchical back handling
-    val hasLocalOverlay = sessionToRename != null ||
-            showSessionSwitcherSheet ||
+    val hasLocalOverlay = showWorkSessionSwitcherSheet ||
+            showTerminalSessionSwitcherSheet ||
+            showDirectoryPickerSheet ||
+            showImportCliSessionSheet ||
             showServerSettingsSheet ||
             showToolsSheet ||
             showSelectAgentSheet ||
@@ -286,8 +333,10 @@ fun SessionScreen(
     // 仅在存在局部弹窗或软键盘时启用局部 BackHandler 优先拦截关闭弹窗；无局部状态时放行给全局 PredictiveBack
     BackHandler(enabled = hasLocalOverlay) {
         when {
-            sessionToRename != null -> sessionToRename = null
-            showSessionSwitcherSheet -> showSessionSwitcherSheet = false
+            showWorkSessionSwitcherSheet -> showWorkSessionSwitcherSheet = false
+            showTerminalSessionSwitcherSheet -> showTerminalSessionSwitcherSheet = false
+            showDirectoryPickerSheet -> showDirectoryPickerSheet = false
+            showImportCliSessionSheet -> showImportCliSessionSheet = false
             showServerSettingsSheet -> showServerSettingsSheet = false
             showToolsSheet -> showToolsSheet = false
             showSelectAgentSheet -> showSelectAgentSheet = false
@@ -315,7 +364,8 @@ fun SessionScreen(
             // Top Navigation & Status Bar with Session Switching & Theme Toggle
             SessionTopBar(
                 server = currentServer,
-                activeSession = activeSessionItem,
+                activeTerminalSession = activeSessionItem,
+                activeWorkSession = activeWorkSessionItem,
                 connectionState = if (currentMode == SessionMode.WORK) chatConnectionState else shellConnectionState,
                 currentMode = currentMode,
                 onModeSelected = { currentMode = it },
@@ -331,7 +381,29 @@ fun SessionScreen(
                     keyboardController?.hide()
                     onBack()
                 },
-                onTitleClick = { showSessionSwitcherSheet = true },
+                onOpenTerminalSessions = { showTerminalSessionSwitcherSheet = true },
+                onOpenWorkSessions = { showWorkSessionSwitcherSheet = true },
+                onCreateTerminalSession = {
+                    sessionManager.createSession(currentServer)
+                },
+                onCreateWorkSession = {
+                    sessionManager.createWorkSession(
+                        server = currentServer,
+                        cwd = currentServer.presetDirectories.firstOrNull() ?: "~",
+                        agentId = currentServer.defaultAgentId ?: activeAgent?.id,
+                        model = activeAgent?.selectedModel ?: "default",
+                        thinkingLevel = activeAgent?.thinkingLevel ?: ThinkingLevel.AUTO
+                    )
+                },
+                onOpenDirectoryPicker = { showDirectoryPickerSheet = true },
+                onOpenImportCliSession = { showImportCliSessionSheet = true },
+                onResetWorkContext = {
+                    agentRunner.clearMessages()
+                    val dbHelper = LocalAgentDatabaseHelper(context)
+                    dbHelper.clearWorkMessages(activeWorkSessionItem.id)
+                },
+                onOpenSelectAgent = { showSelectAgentSheet = true },
+                onOpenSelectModel = { showSelectModelSheet = true },
                 onViewLogs = {
                     onOpenLogsScreen(agentRawLogs, agentEventLogs)
                 },
@@ -341,7 +413,9 @@ fun SessionScreen(
                 },
                 onClear = {
                     if (currentMode == SessionMode.WORK) {
-                        chatTerminalSession.clearScreen()
+                        agentRunner.clearMessages()
+                        val dbHelper = LocalAgentDatabaseHelper(context)
+                        dbHelper.clearWorkMessages(activeWorkSessionItem.id)
                     } else {
                         shellTerminalSession.clearScreen()
                     }
@@ -494,6 +568,17 @@ fun SessionScreen(
                         activeAgent = activeAgent,
                         isAgentBusy = isAgentBusy,
                         isDark = isDark,
+                        currentCwd = activeWorkSessionItem.cwd,
+                        availableFiles = availableFiles,
+                        attachedImages = attachedImages,
+                        onPickImage = {
+                            imagePickerLauncher.launch("image/*")
+                        },
+                        onRemoveImage = { idx ->
+                            if (idx in attachedImages.indices) {
+                                attachedImages = attachedImages.filterIndexed { i, _ -> i != idx }
+                            }
+                        },
                         onOpenSelectAgent = {
                             focusManager.clearFocus()
                             keyboardController?.hide()
@@ -509,11 +594,18 @@ fun SessionScreen(
                             keyboardController?.hide()
                             showThinkingLevelSheet = true
                         },
+                        onOpenSelectDirectory = {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                            showDirectoryPickerSheet = true
+                        },
                         onSend = {
                             val promptToSend = chatInputText.trim()
-                            if (promptToSend.isNotBlank()) {
+                            val imagesToSend = attachedImages
+                            if (promptToSend.isNotBlank() || imagesToSend.isNotEmpty()) {
                                 chatInputText = ""
-                                agentRunner.sendPrompt(promptToSend)
+                                attachedImages = emptyList()
+                                 agentRunner.sendPrompt(promptToSend, imagesToSend)
                             }
                         }
                     )
@@ -669,41 +761,79 @@ fun SessionScreen(
             onDismiss = { showThinkingLevelSheet = false }
         )
     }
-    if (showSessionSwitcherSheet) {
-        SessionSwitcherSheet(
+    if (showWorkSessionSwitcherSheet) {
+        WorkSessionSwitcherBottomSheet(
+            server = currentServer,
+            sessions = serverWorkSessions,
+            activeSessionId = activeWorkSessionItem.id,
+            onSelectSession = { sessionId ->
+                sessionManager.setActiveWorkSession(currentServer.id, sessionId)
+            },
+            onCreateSession = {
+                sessionManager.createWorkSession(
+                    server = currentServer,
+                    cwd = currentServer.presetDirectories.firstOrNull() ?: "~",
+                    agentId = currentServer.defaultAgentId ?: activeAgent?.id,
+                    model = activeAgent?.selectedModel ?: "default",
+                    thinkingLevel = activeAgent?.thinkingLevel ?: ThinkingLevel.AUTO
+                )
+            },
+            onRenameSession = { sessionItem, newTitle ->
+                sessionManager.renameWorkSession(currentServer.id, sessionItem.id, newTitle)
+            },
+            onDeleteSession = { sessionId ->
+                sessionManager.closeWorkSession(currentServer.id, sessionId)
+            },
+            onDismiss = { showWorkSessionSwitcherSheet = false }
+        )
+    }
+
+    if (showTerminalSessionSwitcherSheet) {
+        TerminalSessionSwitcherBottomSheet(
             server = currentServer,
             sessions = serverSessions,
             activeSessionId = activeSessionItem.id,
             onSelectSession = { sessionId ->
                 sessionManager.setActiveSession(currentServer.id, sessionId)
-                showSessionSwitcherSheet = false
             },
-            onNewSession = {
+            onCreateSession = {
                 sessionManager.createSession(currentServer)
-                showSessionSwitcherSheet = false
             },
-            onRenameRequest = { sessionItem ->
-                sessionToRename = sessionItem
+            onRenameSession = { sessionItem, newTitle ->
+                sessionManager.renameSession(currentServer.id, sessionItem.id, newTitle)
             },
             onCloseSession = { sessionId ->
                 sessionManager.closeSession(currentServer.id, sessionId)
-                if (serverSessions.size <= 1) {
-                    showSessionSwitcherSheet = false
-                }
             },
-            onDismiss = { showSessionSwitcherSheet = false }
+            onDismiss = { showTerminalSessionSwitcherSheet = false }
         )
     }
 
-    // Rename Session Dialog
-    if (sessionToRename != null) {
-        RenameSessionDialog(
-            currentTitle = sessionToRename!!.title,
-            onDismiss = { sessionToRename = null },
-            onSave = { newTitle ->
-                sessionManager.renameSession(currentServer.id, sessionToRename!!.id, newTitle)
-                sessionToRename = null
-            }
+    if (showDirectoryPickerSheet) {
+        DirectoryPickerBottomSheet(
+            currentCwd = activeWorkSessionItem.cwd,
+            presetDirectories = currentServer.presetDirectories,
+            onSelectDirectory = { newCwd ->
+                sessionManager.updateWorkSessionCwd(currentServer.id, activeWorkSessionItem.id, newCwd)
+            },
+            onDismiss = { showDirectoryPickerSheet = false }
+        )
+    }
+
+    if (showImportCliSessionSheet) {
+        ImportCliSessionBottomSheet(
+            server = currentServer,
+            onImportSession = { cli, sessionId, title, cwd ->
+                val newSession = sessionManager.createWorkSession(
+                    server = currentServer,
+                    title = title,
+                    cwd = cwd,
+                    agentId = cli,
+                    cliResumeId = sessionId
+                )
+                sessionManager.setActiveWorkSession(currentServer.id, newSession.id)
+            },
+            onDismiss = { showImportCliSessionSheet = false }
         )
     }
 
@@ -727,7 +857,8 @@ fun SessionScreen(
 @Composable
 fun SessionTopBar(
     server: ServerConfig,
-    activeSession: ServerSessionItem,
+    activeTerminalSession: ServerSessionItem,
+    activeWorkSession: WorkSessionItem?,
     connectionState: ConnectionState,
     currentMode: SessionMode,
     onModeSelected: (SessionMode) -> Unit,
@@ -736,7 +867,15 @@ fun SessionTopBar(
     onToggleSoftWrap: () -> Unit,
     onToggleTheme: () -> Unit,
     onBack: () -> Unit,
-    onTitleClick: () -> Unit,
+    onOpenTerminalSessions: () -> Unit,
+    onOpenWorkSessions: () -> Unit,
+    onCreateTerminalSession: () -> Unit,
+    onCreateWorkSession: () -> Unit,
+    onOpenDirectoryPicker: () -> Unit,
+    onOpenImportCliSession: () -> Unit,
+    onResetWorkContext: () -> Unit,
+    onOpenSelectAgent: () -> Unit,
+    onOpenSelectModel: () -> Unit,
     onViewLogs: () -> Unit,
     onReconnect: () -> Unit,
     onClear: () -> Unit,
@@ -794,25 +933,83 @@ fun SessionTopBar(
                 }
             }
             val menuItems = mutableListOf<OpenAiMenuItemData>()
-            menuItems.add(
-                OpenAiMenuItemData(
-                    title = "会话列表 (${server.name})",
-                    icon = LucideIcons.Terminal,
-                    onClick = onTitleClick
-                )
-            )
-            // 日志：仅在 Work 模式下显示
+
+            // Work 模式专属功能菜单
             if (currentMode == SessionMode.WORK) {
                 menuItems.add(
                     OpenAiMenuItemData(
-                        title = "日志",
+                        title = "任务会话 (${activeWorkSession?.title ?: "会话列表"})",
+                        icon = LucideIcons.Folder,
+                        onClick = onOpenWorkSessions
+                    )
+                )
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "新建任务会话",
+                        icon = LucideIcons.Plus,
+                        onClick = onCreateWorkSession
+                    )
+                )
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "工作目录 (${activeWorkSession?.cwd ?: "~"})",
+                        icon = LucideIcons.Folder,
+                        onClick = onOpenDirectoryPicker
+                    )
+                )
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "导入/恢复 CLI 会话",
+                        icon = LucideIcons.Download,
+                        onClick = onOpenImportCliSession
+                    )
+                )
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "选择生效 Agent",
+                        icon = LucideIcons.Bot,
+                        onClick = onOpenSelectAgent
+                    )
+                )
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "切换模型偏好",
+                        icon = LucideIcons.Asteroid,
+                        onClick = onOpenSelectModel
+                    )
+                )
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "重置会话上下文",
+                        icon = LucideIcons.Eraser,
+                        onClick = onResetWorkContext
+                    )
+                )
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "查看执行日志",
                         icon = LucideIcons.Code2,
                         onClick = onViewLogs
                     )
                 )
             }
-            // 自动换行：仅在 Terminal 模式下显示
+
+            // Terminal 模式专属功能菜单
             if (currentMode == SessionMode.TERMINAL) {
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "终端会话 (${activeTerminalSession.title})",
+                        icon = LucideIcons.Terminal,
+                        onClick = onOpenTerminalSessions
+                    )
+                )
+                menuItems.add(
+                    OpenAiMenuItemData(
+                        title = "新建终端标签",
+                        icon = LucideIcons.Plus,
+                        onClick = onCreateTerminalSession
+                    )
+                )
                 menuItems.add(
                     OpenAiMenuItemData(
                         title = if (softWrap) "禁用自动换行" else "启用自动换行",
@@ -820,24 +1017,23 @@ fun SessionTopBar(
                         onClick = onToggleSoftWrap
                     )
                 )
-            }
-            if (connectionState is ConnectionState.Disconnected || connectionState is ConnectionState.Error) {
                 menuItems.add(
                     OpenAiMenuItemData(
-                        title = "重新连接",
-                        icon = LucideIcons.RefreshCw,
-                        iconTint = AccentGreen,
-                        onClick = onReconnect
+                        title = "清空终端屏幕",
+                        icon = LucideIcons.Eraser,
+                        onClick = onClear
                     )
                 )
             }
-            // 清空终端：仅在 Terminal 模式下显示
-            if (currentMode == SessionMode.TERMINAL) {
+
+            // 通用网络与设置项
+            if (connectionState is ConnectionState.Disconnected || connectionState is ConnectionState.Error) {
                 menuItems.add(
                     OpenAiMenuItemData(
-                        title = "清空终端",
-                        icon = LucideIcons.Eraser,
-                        onClick = onClear
+                        title = "重新连接网络",
+                        icon = LucideIcons.RefreshCw,
+                        iconTint = AccentGreen,
+                        onClick = onReconnect
                     )
                 )
             }
@@ -848,12 +1044,13 @@ fun SessionTopBar(
                     onClick = onOpenSettings
                 )
             )
+
             OpenAiDropdownMenu(
                 expanded = showMoreMenu,
                 onDismissRequest = { showMoreMenu = false },
                 items = menuItems,
                 isDark = isDark,
-                width = 230.dp
+                width = 240.dp
             )
         }
     }

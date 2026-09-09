@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
 fun ServerAgentSettingsScreen(
     server: ServerConfig,
     agentDiscoveryRepo: AgentDiscoveryRepository,
+    onSaveServer: (ServerConfig) -> Unit = {},
     onNavigateToSingleAgent: (DiscoveredAgent) -> Unit,
     onBack: () -> Unit
 ) {
@@ -64,7 +65,8 @@ fun ServerAgentSettingsScreen(
     var discoveredAgents by remember(server.id) {
         mutableStateOf(agentDiscoveryRepo.getCachedAgents(server.id))
     }
-
+    var currentServer by remember { mutableStateOf(server) }
+    val defaultAgentId = currentServer.defaultAgentId ?: agentDiscoveryRepo.getSelectedAgentId(currentServer.id)
     // 触发 SSH 快速探测
     fun startScan() {
         if (isScanning) return
@@ -169,11 +171,12 @@ fun ServerAgentSettingsScreen(
                             index == discoveredAgents.size - 1 -> CardPosition.BOTTOM
                             else -> CardPosition.MIDDLE
                         }
-
+                        val isDefault = agent.id == defaultAgentId
                         OpenAiSettingRow(
                             title = meta.displayName,
                             subtitle = if (agent.isAvailable) "已安装 (${agent.version.ifBlank { "版本就绪" }})" else "未就绪",
                             icon = icon,
+                            trailingText = if (isDefault) "默认 Agent" else null,
                             showChevron = true,
                             position = position,
                             isDark = isDark,

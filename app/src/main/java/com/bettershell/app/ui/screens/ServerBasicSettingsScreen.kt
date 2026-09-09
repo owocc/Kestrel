@@ -73,7 +73,8 @@ fun ServerBasicSettingsScreen(
     var privateKey by remember { mutableStateOf(server.privateKey) }
     var passphrase by remember { mutableStateOf(server.passphrase) }
     var showPassword by remember { mutableStateOf(false) }
-
+    var presetDirsText by remember { mutableStateOf(server.presetDirectories.joinToString("\n")) }
+    var persistentTerminal by remember { mutableStateOf(server.persistentTerminalSession) }
     fun doSave() {
         val p = portText.toIntOrNull() ?: 22
         val updated = server.copy(
@@ -86,9 +87,10 @@ fun ServerBasicSettingsScreen(
             authType = authType,
             password = password,
             privateKey = privateKey,
-            passphrase = passphrase
+            passphrase = passphrase,
+            presetDirectories = presetDirsText.lines().map { it.trim() }.filter { it.isNotBlank() },
+            persistentTerminalSession = persistentTerminal
         )
-        onSaveServer(updated)
         onBack()
     }
 
@@ -300,6 +302,54 @@ fun ServerBasicSettingsScreen(
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            // 预置项目目录配置 (方便 Work 模式一键切换)
+            OpenAiSectionCard(
+                headerTitle = "工作空间与项目目录",
+                isDark = isDark
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "预置项目目录列表 (每行一个，用于 Work 模式快速跳转与文件探测)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = presetDirsText,
+                        onValueChange = { presetDirsText = it },
+                        placeholder = { Text("/home/user/myproject\n/var/www/site\n~/dev/agent-repo") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "终端常驻守护 (Tmux / Herdr 模式)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "断开 SSH 后远程终端与任务不中断，重新连接后自动恢复",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = persistentTerminal,
+                            onCheckedChange = { persistentTerminal = it }
                         )
                     }
                 }

@@ -24,5 +24,8 @@ data class ServerConfig(
     val icon: String = "", // 自选 Tabler 图标 key，如 "terminal", "server", "docker" 等
     val startupScript: String = "", // 自定义sh代码
     val isMock: Boolean = false,
-    val lastConnected: Long = 0L
+    val lastConnected: Long = 0L,
+    val defaultAgentId: String? = null,
+    val presetDirectories: List<String> = emptyList(),
+    val persistentTerminalSession: Boolean = true
 )

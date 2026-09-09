@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
 
         val repository = ServerRepository(applicationContext)
         val terminalPrefsRepo = com.bettershell.app.data.TerminalPreferencesRepository(applicationContext)
-        val sessionManager = com.bettershell.app.terminal.SessionManager()
+        val sessionManager = com.bettershell.app.terminal.SessionManager(applicationContext)
         val agentDiscoveryRepo = com.bettershell.app.agent.AgentDiscoveryRepository(applicationContext)
 
         setContent {
@@ -172,6 +172,11 @@ class MainActivity : ComponentActivity() {
                                 ServerAgentSettingsScreen(
                                     server = screen.server,
                                     agentDiscoveryRepo = agentDiscoveryRepo,
+                                    onSaveServer = { updatedServer ->
+                                        coroutineScope.launch {
+                                            repository.updateServer(updatedServer)
+                                        }
+                                    },
                                     onNavigateToSingleAgent = { agent ->
                                         pushScreen(Screen.SingleAgentConfig(screen.server, agent))
                                     },
