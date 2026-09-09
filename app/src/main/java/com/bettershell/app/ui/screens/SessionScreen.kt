@@ -385,15 +385,12 @@ fun SessionScreen(
                 )
             )
         } else {
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Spacer(modifier = Modifier.height(56.dp))
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
+            val statusBarTopDp = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .haze(workHazeState)
+                    .padding(horizontal = 16.dp)
                     .pointerInput(terminalPrefs.fontSizeSp) {
                         awaitEachGesture {
                             var initialDistance = 0f
@@ -449,6 +446,8 @@ fun SessionScreen(
                             )
                     ) {
                         Column {
+                            // Top padding so terminal text starts cleanly below top header without occlusion
+                            Spacer(modifier = Modifier.height(statusBarTopDp + 66.dp))
                             Text(
                                 text = displayOutput,
                                 style = TextStyle(
@@ -461,8 +460,8 @@ fun SessionScreen(
                                 modifier = if (terminalPrefs.softWrap) Modifier.fillMaxWidth() else Modifier
                             )
 
-                            // Bottom padding so terminal text is not obscured by the collapsed bottom input bar
-                            Spacer(modifier = Modifier.height(115.dp))
+                            // Bottom padding so terminal text is never obscured by the bottom shortcut & input bar
+                            Spacer(modifier = Modifier.height(145.dp))
                         }
                     }
                 }
@@ -503,7 +502,6 @@ fun SessionScreen(
                     }
                 }
             }
-        }
         }
 
         // Top Floating Navigation Header (Overlaid at top of content area, reversed gradient in Work mode)
@@ -700,7 +698,65 @@ fun SessionScreen(
                 }
                 }
             } else {
-                // Shell 终端专属独立输入体系 (快捷键栏 + 药丸命令输入框 + 多行扩展支持)
+                // Shell 终端专属独立输入体系 (与 Work 模式完全一致的毛玻璃 + 80% 实色渐变底座)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                ) {
+                    val baseColor = if (isDark) Color.Black else Color.White
+                    val bottomFinalColor = baseColor.copy(alpha = 0.80f)
+                    val solidStartDp = 36.dp
+
+                    // 1. 真实毛玻璃模糊层 (Backdrop Blur，与 Work 模式逻辑完全一致)
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .hazeChild(
+                                state = workHazeState,
+                                style = HazeDefaults.style(
+                                    backgroundColor = baseColor.copy(alpha = if (isDark) 0.50f else 0.65f),
+                                    blurRadius = 24.dp,
+                                    noiseFactor = 0f
+                                )
+                            ) {
+                                mask = Brush.verticalGradient(
+                                    0.0f to Color.Transparent,
+                                    0.4f to Color.Black.copy(alpha = 0.4f),
+                                    1.0f to Color.Black,
+                                    startY = 0f,
+                                    endY = with(density) { solidStartDp.toPx() }
+                                )
+                            }
+                    )
+
+                    // 2. 渐变 + 80%实色遮挡层
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .drawBehind {
+                                val solidStartPx = solidStartDp.toPx()
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        0.0f to Color.Transparent,
+                                        0.35f to baseColor.copy(alpha = 0.20f),
+                                        0.70f to baseColor.copy(alpha = 0.55f),
+                                        1.0f to bottomFinalColor,
+                                        startY = 0f,
+                                        endY = solidStartPx
+                                    ),
+                                    topLeft = Offset.Zero,
+                                    size = Size(size.width, solidStartPx)
+                                )
+                                if (size.height > solidStartPx) {
+                                    drawRect(
+                                        color = bottomFinalColor,
+                                        topLeft = Offset(0f, solidStartPx),
+                                        size = Size(size.width, size.height - solidStartPx)
+                                    )
+                                }
+                            }
+                    )
                 androidx.compose.animation.AnimatedVisibility(
                     visible = isExpandedInput,
                     modifier = Modifier
@@ -768,6 +824,7 @@ fun SessionScreen(
                     }
                 }
             }
+                }
         }
     }
     // Material 3 Standard Tools Modal Bottom Sheet
@@ -980,15 +1037,15 @@ fun SessionTopBar(
 
     val statusBarHeightPx = WindowInsets.statusBars.getTop(density).toFloat()
     val statusBarHeightDp = with(density) { statusBarHeightPx.toDp() }
-    val headerHeight = if (isWorkMode) statusBarHeightDp + 76.dp else statusBarHeightDp + 56.dp
-    val solidEndDp = if (isWorkMode) statusBarHeightDp + 48.dp else statusBarHeightDp + 56.dp
+    val headerHeight = statusBarHeightDp + 76.dp
+    val solidEndDp = statusBarHeightDp + 48.dp
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(headerHeight)
     ) {
-        if (isWorkMode && hazeState != null) {
+        if (hazeState != null) {
             // 1. 顶部真实毛玻璃背景模糊层 (全屏沉浸：从状态栏顶端向下延伸并渐隐至完全透明)
             Box(
                 modifier = Modifier
