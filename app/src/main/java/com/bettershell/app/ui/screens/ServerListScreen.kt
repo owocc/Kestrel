@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -68,14 +69,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bettershell.app.data.AuthType
 import com.bettershell.app.data.ServerConfig
 import com.bettershell.app.data.ServerRepository
 import com.bettershell.app.data.TerminalPreferencesRepository
+import com.bettershell.app.portforward.PortForwardManager
 import com.bettershell.app.ui.components.CardPosition
 import com.bettershell.app.ui.components.LucideIcons
 import com.bettershell.app.ui.components.OpenAiDropdownMenu
 import com.bettershell.app.ui.components.OpenAiMenuItemData
+import com.bettershell.app.ui.components.PortForwardDialog
 import com.bettershell.app.ui.components.getCardShape
+import com.bettershell.app.ui.theme.AccentGreen
 import com.bettershell.app.ui.theme.isAppInDarkTheme
 import kotlinx.coroutines.launch
 
@@ -89,6 +94,7 @@ enum class ServerLayoutMode {
 fun ServerListScreen(
     repository: ServerRepository,
     prefsRepository: TerminalPreferencesRepository,
+    portForwardManager: PortForwardManager,
     onOpenAppSettings: () -> Unit,
     onSelectServer: (ServerConfig) -> Unit,
     onOpenAddServer: () -> Unit,
@@ -99,6 +105,13 @@ fun ServerListScreen(
     val prefs by prefsRepository.preferences.collectAsState()
     val layoutMode = if (prefs.serverLayoutMode == "GRID") ServerLayoutMode.GRID else ServerLayoutMode.LIST
     var searchQuery by remember { mutableStateOf("") }
+
+    // 端口映射入口：记录当前要打开映射对话框的服务器
+    var portForwardTarget by remember { mutableStateOf<ServerConfig?>(null) }
+    val portForwardTunnels by portForwardManager.tunnels.collectAsState()
+    val activeForwardCountByServer = remember(portForwardTunnels) {
+        portForwardTunnels.filter { it.isLive }.groupingBy { it.serverId }.eachCount()
+    }
 
     val scope = rememberCoroutineScope()
     val filteredServers = remember(servers, searchQuery) {
@@ -289,8 +302,10 @@ fun ServerListScreen(
                                 server = server,
                                 position = position,
                                 isDark = isDark,
+                                activeForwardCount = activeForwardCountByServer[server.id] ?: 0,
                                 onConnect = { onSelectServer(server) },
                                 onManage = { onOpenServerSettings(server) },
+                                onOpenPortForward = { portForwardTarget = server },
                                 onDelete = {
                                     scope.launch {
                                         repository.deleteServer(server.id)
@@ -316,8 +331,10 @@ fun ServerListScreen(
                             ServerGridCard(
                                 server = server,
                                 isDark = isDark,
+                                activeForwardCount = activeForwardCountByServer[server.id] ?: 0,
                                 onConnect = { onSelectServer(server) },
                                 onManage = { onOpenServerSettings(server) },
+                                onOpenPortForward = { portForwardTarget = server },
                                 onDelete = {
                                     scope.launch {
                                         repository.deleteServer(server.id)
@@ -329,6 +346,15 @@ fun ServerListScreen(
                 }
             }
         }
+    }
+
+    // 端口映射对话框：隧道由管理器与前台服务持有，关闭对话框后继续运行
+    portForwardTarget?.let { target ->
+        PortForwardDialog(
+            server = target,
+            manager = portForwardManager,
+            onDismiss = { portForwardTarget = null }
+        )
     }
 }
 
@@ -343,8 +369,10 @@ fun ServerCard(
     server: ServerConfig,
     position: CardPosition,
     isDark: Boolean,
+    activeForwardCount: Int = 0,
     onConnect: () -> Unit,
     onManage: () -> Unit,
+    onOpenPortForward: () -> Unit,
     onDelete: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -455,19 +483,34 @@ fun ServerCard(
                     OpenAiDropdownMenu(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
-                        items = listOf(
-                            OpenAiMenuItemData(
-                                title = "服务器设置",
-                                icon = LucideIcons.Bolt,
-                                onClick = onManage
-                            ),
-                            OpenAiMenuItemData(
-                                title = "删除服务器",
-                                icon = LucideIcons.Trash2,
-                                isDestructive = true,
-                                onClick = onDelete
+                        items = buildList {
+                            add(
+                                OpenAiMenuItemData(
+                                    title = "服务器设置",
+                                    icon = LucideIcons.Bolt,
+                                    onClick = onManage
+                                )
                             )
-                        )
+                            // 演示服务器没有真实网络，不提供端口映射
+                            if (!server.isMock && server.authType != AuthType.DEMO_MOCK) {
+                                add(
+                                    OpenAiMenuItemData(
+                                        title = if (activeForwardCount > 0) "端口映射 ($activeForwardCount)" else "端口映射",
+                                        icon = Icons.Rounded.SwapHoriz,
+                                        iconTint = if (activeForwardCount > 0) AccentGreen else Color.Unspecified,
+                                        onClick = onOpenPortForward
+                                    )
+                                )
+                            }
+                            add(
+                                OpenAiMenuItemData(
+                                    title = "删除服务器",
+                                    icon = LucideIcons.Trash2,
+                                    isDestructive = true,
+                                    onClick = onDelete
+                                )
+                            )
+                        }
                     )
                 }
             }
@@ -482,8 +525,10 @@ fun ServerCard(
 fun ServerGridCard(
     server: ServerConfig,
     isDark: Boolean,
+    activeForwardCount: Int = 0,
     onConnect: () -> Unit,
     onManage: () -> Unit,
+    onOpenPortForward: () -> Unit,
     onDelete: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -589,19 +634,34 @@ fun ServerGridCard(
                         OpenAiDropdownMenu(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false },
-                            items = listOf(
-                                OpenAiMenuItemData(
-                                    title = "服务器设置",
-                                    icon = LucideIcons.Bolt,
-                                    onClick = onManage
-                                ),
-                                OpenAiMenuItemData(
-                                    title = "删除服务器",
-                                    icon = LucideIcons.Trash2,
-                                    isDestructive = true,
-                                    onClick = onDelete
+                            items = buildList {
+                                add(
+                                    OpenAiMenuItemData(
+                                        title = "服务器设置",
+                                        icon = LucideIcons.Bolt,
+                                        onClick = onManage
+                                    )
                                 )
-                            )
+                                // 演示服务器没有真实网络，不提供端口映射
+                                if (!server.isMock && server.authType != AuthType.DEMO_MOCK) {
+                                    add(
+                                        OpenAiMenuItemData(
+                                            title = if (activeForwardCount > 0) "端口映射 ($activeForwardCount)" else "端口映射",
+                                            icon = Icons.Rounded.SwapHoriz,
+                                            iconTint = if (activeForwardCount > 0) AccentGreen else Color.Unspecified,
+                                            onClick = onOpenPortForward
+                                        )
+                                    )
+                                }
+                                add(
+                                    OpenAiMenuItemData(
+                                        title = "删除服务器",
+                                        icon = LucideIcons.Trash2,
+                                        isDestructive = true,
+                                        onClick = onDelete
+                                    )
+                                )
+                            }
                         )
                     }
                 }

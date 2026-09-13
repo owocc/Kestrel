@@ -390,8 +390,9 @@ private fun AuthTypeChip(
     }
 }
 
+/** 统一的输入框配色，供本模块内多个对话框（服务器编辑、端口映射）复用 */
 @Composable
-private fun textFieldColors() = OutlinedTextFieldDefaults.colors(
+internal fun textFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
     focusedBorderColor = MaterialTheme.colorScheme.primary,

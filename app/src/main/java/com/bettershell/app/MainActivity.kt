@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
         val terminalPrefsRepo = com.bettershell.app.data.TerminalPreferencesRepository(applicationContext)
         val sessionManager = com.bettershell.app.terminal.SessionManager(applicationContext)
         val agentDiscoveryRepo = com.bettershell.app.agent.AgentDiscoveryRepository(applicationContext)
+        val portForwardManager = com.bettershell.app.portforward.PortForwardManager.getInstance(applicationContext)
 
         setContent {
             val terminalPrefs by terminalPrefsRepo.preferences.collectAsState()
@@ -88,6 +89,7 @@ class MainActivity : ComponentActivity() {
                                 ServerListScreen(
                                     repository = repository,
                                     prefsRepository = terminalPrefsRepo,
+                                    portForwardManager = portForwardManager,
                                     onOpenAppSettings = { pushScreen(Screen.AppSettings) },
                                     onOpenAddServer = { pushScreen(Screen.AddServer) },
                                     onOpenServerSettings = { server ->
